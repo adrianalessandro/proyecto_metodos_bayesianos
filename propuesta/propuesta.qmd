@@ -1,0 +1,753 @@
+---
+title: "Análisis Bayesiano de la Industria del Anime: Calidad Productiva y Fidelización de Audiencia"
+subtitle: "Propuesta de Proyecto — Métodos Bayesianos"
+author:
+  - "Nicolas Sanchez"
+  - "Adrian Godoy"
+  - "[Nombre]"
+  - "[Nombre]"
+date: "2026-05-11"
+date-format: "D [de] MMMM [de] 2026"
+lang: es
+format:
+  pdf:
+    documentclass: article
+    papersize: letter
+    fontsize: 11pt
+    geometry:
+      - margin=2.5cm
+    number-sections: true
+    toc: false
+    colorlinks: true
+    linkcolor: NavyBlue
+    urlcolor: NavyBlue
+    citecolor: NavyBlue
+    fig-pos: "H"           
+    keep-tex: true         
+    include-in-header:
+      text: |
+        \usepackage{booktabs}
+        \usepackage{float} 
+
+execute:
+  echo: false
+  warning: false
+  message: false
+  fig-align: center
+editor: source
+bibliography: references.bib
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+# Paquetes principales
+library(tidyverse)
+library(knitr)
+library(scales)
+library(patchwork)
+library(kableExtra)
+
+# Tema visual consistente para todos los gráficos
+theme_set(
+  theme_minimal(base_size = 10) +
+    theme(
+      plot.title    = element_text(face = "bold", size = 11),
+      plot.subtitle = element_text(size = 9, color = "grey40"),
+      legend.position = "bottom"
+    )
+)
+
+# Carga del dataset (ajustar la ruta si es necesario)
+ruta_datos <- "../dataset/mal_anime.csv"
+df_raw <- read_csv(ruta_datos, show_col_types = FALSE)
+
+# Pipeline de limpieza acordado en la fase exploratoria
+df <- df_raw %>%
+  mutate(
+    Score      = suppressWarnings(as.numeric(Score)),
+    Members    = suppressWarnings(as.numeric(Members)),
+    Favorites  = suppressWarnings(as.numeric(Favorites)),
+    Episodes   = suppressWarnings(as.numeric(Episodes)),
+    Year       = suppressWarnings(as.numeric(stringr::str_extract(Premiered, "\\d{4}")))
+  ) %>%
+  filter(
+    !str_detect(Rating, "Hentai") | is.na(Rating),
+    Studios != "add some",
+    !is.na(Studios), Studios != "Unknown"
+  )
+```
+
+```{r}
+#| label: data_preparation
+#| include: false
+
+# ============================================================
+# CHUNK: data_preparation
+# Esta sección prepara los subconjuntos usados por todo el análisis
+# ============================================================
+
+# Subconjunto principal: TV anime no-Hentai, sin "add some", con Score
+df_main <- df %>%
+  filter(
+    Type == "TV",
+    !is.na(Score),
+    !is.na(Members), !is.na(Favorites),
+    Members > 0,
+    !is.na(Year),
+    !is.na(Source), Source != "Unknown",
+    !is.na(Genres), Genres != "Unknown"
+  )
+
+# Tasa de favoritos
+df_main <- df_main %>%
+  mutate(
+    fav_rate    = Favorites / Members,
+    log_members = log10(Members)
+  )
+
+# Subconjunto para Pregunta 2 (con umbral de Members)
+df_p2 <- df_main %>% filter(Members >= 1000)
+
+# Source agrupado en 5 categorías limpias
+df_main <- df_main %>%
+  mutate(
+    Source_grouped = case_when(
+      Source %in% c("Manga", "Web manga", "4-koma manga") ~ "Manga",
+      Source %in% c("Light novel", "Novel", "Web novel")  ~ "Novel",
+      Source %in% c("Visual novel", "Game", "Card game")  ~ "Game/VN",
+      Source == "Original"                                 ~ "Original",
+      TRUE                                                 ~ "Other"
+    ),
+    Source_grouped = factor(
+      Source_grouped,
+      levels = c("Original", "Manga", "Novel", "Game/VN", "Other")
+    )
+  )
+
+df_p2 <- df_p2 %>%
+  mutate(
+    Source_grouped = case_when(
+      Source %in% c("Manga", "Web manga", "4-koma manga") ~ "Manga",
+      Source %in% c("Light novel", "Novel", "Web novel")  ~ "Novel",
+      Source %in% c("Visual novel", "Game", "Card game")  ~ "Game/VN",
+      Source == "Original"                                 ~ "Original",
+      TRUE                                                 ~ "Other"
+    ),
+    Source_grouped = factor(
+      Source_grouped,
+      levels = c("Original", "Manga", "Novel", "Game/VN", "Other")
+    )
+  )
+
+# Studios "primarios": el primero listado en cada anime
+# (Decisión: cuando hay varios estudios, atribuimos al primero,
+#  que en MAL suele ser el estudio principal. Esta es una simplificación
+#  que se discutirá en limitaciones.)
+df_main <- df_main %>%
+  mutate(
+    Studio_primary = str_trim(str_split_fixed(Studios, ",", 2)[, 1])
+  ) %>%
+  filter(Studio_primary != "add some", Studio_primary != "")
+
+df_p2 <- df_p2 %>%
+  mutate(
+    Studio_primary = str_trim(str_split_fixed(Studios, ",", 2)[, 1])
+  ) %>%
+  filter(Studio_primary != "add some", Studio_primary != "")
+
+# Top-15 estudios para gráficos enfocados
+top_studios <- df_main %>%
+  count(Studio_primary, sort = TRUE) %>%
+  slice_head(n = 15) %>%
+  pull(Studio_primary)
+
+# Top-15 géneros (después de explotar la columna Genres)
+df_genres_long <- df_p2 %>%
+  separate_rows(Genres, sep = ",\\s*") %>%
+  filter(Genres != "Hentai")  # ya excluido pero por seguridad
+
+top_genres <- df_genres_long %>%
+  count(Genres, sort = TRUE) %>%
+  slice_head(n = 15) %>%
+  pull(Genres)
+
+# Tamaños de muestra para reportar
+n_main <- nrow(df_main)
+n_p2   <- nrow(df_p2)
+```
+
+# Introducción
+
+La industria del anime constituye uno de los sectores creativos más sofisticados y de mayor proyección global del entretenimiento contemporáneo, con una estructura productiva altamente especializada y una base de audiencia internacional cuyos comportamientos de consumo presentan características distintivas frente a otras industrias audiovisuales. Comprender qué factores explican el éxito de un anime —y, más sutilmente, qué se entiende por "éxito"— es una pregunta de relevancia tanto académica como industrial.
+
+Este proyecto adopta el enfoque de que el éxito de un anime no es un constructo unidimensional. Específicamente, distinguimos dos dimensiones empíricamente separables: la calidad evaluativa, expresada como el promedio de las calificaciones individuales otorgadas por los usuarios, y la fidelización profunda, expresada como la proporción de usuarios alcanzados que llegan a establecer un vínculo afectivo identificable con la obra. Estas dos dimensiones, como mostraremos en el análisis descriptivo, están correlacionadas pero no son equivalentes: existe una fracción sustancial de obras donde divergen abiertamente, lo que justifica estudiarlas como fenómenos distintos y no como dos medidas del mismo objeto.
+
+A partir de esta distinción, formulamos dos preguntas de investigación complementarias —una orientada al lado de la producción, otra al lado del consumo— y proponemos abordarlas mediante modelos bayesianos jerárquicos y de regresión sobre proporciones. La presente propuesta detalla el contexto del problema, las preguntas centrales, el conjunto de datos disponible, los criterios de construcción de la muestra de estudio y los resultados de un análisis descriptivo extensivo orientado a justificar las decisiones de modelado del informe final.
+
+# Contexto y Preguntas de Investigación
+
+## Contexto del fenómeno
+
+La industria del anime ha alcanzado una escala económica y cultural considerable. De acuerdo con la Asociación de Animación Japonesa (AJA) [-@aja2025report], el mercado global del anime —considerando ventas internas, licencias internacionales, mercancía derivada y servicios de distribución digital— alcanzó un valor de mercado récord de 3,84 billones de yenes (aproximadamente 25 mil millones de dólares estadounidenses) en 2024, con un crecimiento sostenido impulsado en buena medida por la expansión de plataformas de streaming internacionales y por la consolidación de comunidades de fans fuera de Japón. En este ecosistema, las decisiones de inversión en nuevas producciones se apoyan en métricas observables tanto sobre la recepción crítica como sobre la profundidad del compromiso de la audiencia.
+
+En este contexto industrial, dos preguntas de naturaleza distinta —pero estrechamente relacionadas— resultan particularmente relevantes. La primera se sitúa en el lado de la producción: existen estudios de animación con larga trayectoria que se han especializado en distintos tipos de obras (adaptaciones de manga, novelas ligeras, novelas visuales, videojuegos, o producciones originales), y es razonable preguntarse si esta especialización se traduce en diferencias sistemáticas en la calidad evaluativa de sus producciones —es decir, si existen "ventajas" identificables de cierto estudio para cierto tipo de material. La segunda se sitúa en el lado del consumo: en una industria donde la popularidad masiva (medida por la audiencia alcanzada) y la fidelización profunda (medida por la intensidad del compromiso emocional) son métricas que no necesariamente coinciden, conviene preguntarse qué géneros narrativos generan mayor identificación afectiva entre los espectadores que los consumen, una vez controlado el efecto del simple alcance comercial.
+
+Ambas preguntas comparten una característica metodológica común: involucran comparaciones entre numerosas categorías (más de 400 estudios, 21 géneros principales) con tamaños muestrales muy desiguales —desde estudios con cientos de obras hasta géneros de nicho con apenas decenas de animes. Este desbalance hace que los enfoques estadísticos clásicos produzcan estimaciones inestables para las categorías menos representadas, mientras que los métodos bayesianos jerárquicos —mediante el mecanismo de partial pooling— permiten combinar información a través de las categorías de forma estadísticamente principada, ofreciendo además una cuantificación natural de la incertidumbre asociada a cada inferencia.
+
+## Preguntas de investigación
+
+A partir del contexto descrito, este proyecto se estructura en torno a dos preguntas de investigación complementarias. La primera adopta una perspectiva orientada al lado de la producción y se centra en la calidad evaluativa; la segunda adopta una perspectiva orientada al lado del consumo y se centra en la fidelización profunda.
+
+### Pregunta 1 — Lado de la producción
+
+**¿Existen diferencias sistemáticas en el nivel de calidad típico —medido a través del Score promedio en MyAnimeList— entre los distintos estudios de animación cuando adaptan diferentes tipos de material original (manga, novela ligera, novela visual, videojuego u obra original)?**
+
+La industria del anime es un sistema productivo altamente especializado en el que distintos estudios han desarrollado a lo largo de décadas capacidades técnicas y estilísticas particulares. Una pregunta central tanto para inversores como para productores es si esa especialización se traduce en una ventaja real al adaptar ciertos tipos de obras originales, o si la calidad del producto final depende principalmente del propio material de origen y no del estudio responsable.
+
+Investigamos si los estudios presentan diferencias sistemáticas en el nivel de calidad típico de sus producciones, controlando por el tipo de material adaptado y por covariables estructurales relevantes. El número de obras producidas por cada estudio varía drásticamente —desde unos pocos títulos hasta varios cientos—, lo que vuelve poco confiables las estimaciones frecuentistas para estudios con escasa producción. Un modelo jerárquico bayesiano permite encoger (partial pooling) las estimaciones de estudios con poca evidencia hacia el promedio global, distinguiendo así diferencias reales de fluctuaciones por azar y preservando la individualidad de los estudios con evidencia abundante.
+
+Planeamos abordar esta pregunta mediante un modelo de regresión jerárquico bayesiano con efectos por estudio sobre el Score, incluyendo el material original como covariable de interés. La especificación detallada del modelo se desarrollará en el informe final, sobre la base de las observaciones empíricas presentadas en el análisis descriptivo.
+
+### Pregunta 2 — Lado del consumo
+
+**¿Qué géneros narrativos están asociados a mayor fidelización profunda —medida como la proporción Favorites/Members— entre la audiencia, una vez controlados el tamaño absoluto del público y los posibles efectos de acumulación temporal?**
+
+En la industria del entretenimiento, la popularidad masiva (cantidad de usuarios alcanzados) y la fidelización profunda (intensidad del compromiso emocional) son dimensiones distintas del éxito. Un anime puede ser muy visto sin generar identificación fuerte, mientras que otro puede tener una audiencia reducida pero altamente comprometida —distinción central para decisiones de mercadotecnia, desarrollo de mercancía derivada y construcción de comunidades de fans.
+
+Estudiamos qué géneros narrativos están asociados con mayores tasas de fidelización profunda, definidas como la proporción de usuarios que marcan un anime como favorito sobre el total de usuarios que lo registran en su lista. La razón Favorites/Members presenta sobredispersión sustancial —pues las decisiones individuales de los usuarios están correlacionadas dentro de un mismo anime por efectos de comunidad y recomendación— y una fracción importante de animes presenta tasas de fidelización muy bajas o nulas, condiciones que invalidan un modelo binomial estándar. El enfoque bayesiano permite incorporar priors débilmente informativos para regularizar los efectos de géneros altamente correlacionados (un mismo anime suele tener varias etiquetas simultáneas) y cuantificar directamente la incertidumbre del ranking de géneros mediante la distribución posterior.
+
+Planeamos abordar esta pregunta mediante un modelo de regresión bayesiana sobre la proporción de favoritos, capaz de manejar sobredispersión, controlando por el año de estreno y el tipo de obra. La especificación detallada se desarrollará en el informe final.
+
+# Datos
+
+## Procedencia y muestra
+
+Los datos utilizados en este proyecto provienen del sitio MyAnimeList (MAL) [@mal2025], una de las plataformas comunitarias más grandes del mundo dedicada al seguimiento, calificación y discusión de obras de anime y manga. MyAnimeList constituye un repositorio particularmente rico para el análisis cuantitativo del anime: combina metadatos productivos curados editorialmente (estudio, productor, material original, fecha de estreno, género) con métricas agregadas de comportamiento de los usuarios (calificación promedio, número de usuarios que registran la obra en su lista, número de usuarios que la marcan como favorita).
+
+El conjunto de datos específico empleado fue publicado en Kaggle bajo el título *MyAnimeList 2025* [@apriansyah2025mal] y corresponde a una extracción automatizada realizada en noviembre de 2025 sobre el archivo estacional de MAL (*Season Archive*). El dataset original contiene **19.931 registros únicos de anime** y **25 variables** que combinan campos de identificación, metadatos productivos, métricas de audiencia e información estructurada sobre personajes. La cobertura comprende obras estrenadas desde la década de 1960 hasta el año 2025, en distintos formatos (TV, película, OVA, ONA, especiales).
+
+Para los objetivos analíticos de este proyecto, se trabaja sobre un subconjunto cuidadosamente filtrado del dataset original. La construcción de este subconjunto se detalla en la Sección 3.3, y el resultado final es una muestra de aproximadamente **4.500 anime de tipo TV** sobre la cual se centran ambos modelos del proyecto.
+
+## Definición de variables
+
+La Tabla 1 resume las variables utilizadas en el análisis, agrupadas según su rol metodológico. Se incluyen únicamente las variables del dataset original que efectivamente se emplean en alguno de los dos modelos o en el análisis descriptivo; campos auxiliares (URL de imagen, identificador interno de MAL, lista de personajes en formato JSON, descripción narrativa) se excluyen de esta tabla por no aportar al análisis estadístico.
+
+```{r}
+#| label: tab-variables
+#| tbl-cap: "Definición y rol de las variables utilizadas en el análisis."
+
+variables_def <- tibble::tribble(
+  ~Variable,         ~Tipo,                    ~Rol,                       ~Descripción,
+  "Score",           "Numérica continua",      "Respuesta (Pregunta 1)",   "Calificación promedio en escala 0–10, agregada sobre las puntuaciones individuales de los usuarios de MAL.",
+  "Favorites",       "Numérica entera",        "Respuesta (Pregunta 2)",   "Número de usuarios que marcaron el anime como favorito.",
+  "Members",         "Numérica entera",        "Exposición (Pregunta 2)",  "Número total de usuarios que registraron el anime en su lista (en cualquier estado: visto, viendo, planeado, etc.).",
+  "Studios",         "Categórica",             "Predictor (Pregunta 1)",   "Estudio(s) de animación responsables de la producción. Cuando hay múltiples, se atribuye al estudio listado en primer lugar.",
+  "Source",          "Categórica",             "Predictor (Pregunta 1)",   "Tipo de material original adaptado: manga, novela ligera, novela, novela visual, videojuego, obra original, etc.",
+  "Genres",          "Categórica multi-valor", "Predictor (Pregunta 2)",   "Lista de géneros narrativos asignados al anime (separados por coma).",
+  "Premiered",       "Texto estructurado",     "Predictor (Pregunta 2)",   "Temporada y año de estreno (ej. 'Fall 2023'). Se extrae el año como variable numérica.",
+  "Type",            "Categórica",             "Filtro de muestra",        "Formato de la obra (TV, Movie, OVA, ONA, Special). El subconjunto de estudio se restringe a TV.",
+  "Rating",          "Categórica",             "Filtro de muestra",        "Clasificación de contenido. Se utiliza para excluir contenido para adultos (Rx — Hentai) del análisis.",
+  "Episodes",        "Numérica entera",        "Covariable potencial",     "Número total de episodios de la obra."
+)
+
+knitr::kable(
+  variables_def,
+  booktabs = TRUE,
+  align = c("l", "l", "l", "l"),
+  col.names = c("Variable", "Tipo", "Rol", "Descripción")
+) %>%
+  kableExtra::column_spec(1, width = "2.2cm") %>%
+  kableExtra::column_spec(2, width = "2.8cm") %>%
+  kableExtra::column_spec(3, width = "3.0cm") %>%
+  kableExtra::column_spec(4, width = "6.5cm")
+```
+
+Adicionalmente, se construyen tres variables derivadas a partir de las anteriores. Primero, la **tasa de favoritos** se define como el cociente $\text{Favorites}/\text{Members}$ y constituye la variable de respuesta operacional de la Pregunta 2. Segundo, el **año de estreno** se obtiene extrayendo los cuatro dígitos numéricos del campo `Premiered` (por ejemplo, "Fall 2023" → 2023). Tercero, la variable `Source` se reagrupa en cinco categorías más amplias —*Original*, *Manga*, *Novel*, *Game/VN*, *Other*— para mitigar la dispersión de las dieciocho categorías originales, muchas de las cuales presentan frecuencias muy bajas. Las decisiones específicas de agrupación se justifican en la Sección 3.3.
+
+## Limpieza y reducción de la muestra
+
+La construcción del subconjunto de estudio sigue cinco pasos sucesivos, cada uno justificado por consideraciones sustantivas o metodológicas. La Tabla 2 (Sección 4.1) cuantifica el efecto de cada filtrado sobre el tamaño de la muestra.
+
+**Paso 1: exclusión de registros con valores corruptos en Studios.** La inspección del campo `Studios` reveló que aproximadamente 4.400 registros (cerca del 22 % del dataset original) tienen como único valor la cadena literal "add some". Una inspección detallada de estos casos indica que se trata de un artefacto del proceso de raspado web: en MAL, cuando un anime no tiene estudio registrado oficialmente, la página muestra el texto "+ Add some" como un botón de invitación a la contribución comunitaria, y el raspador automatizado capturó este texto como si fuera el nombre del estudio. Estos registros se excluyen del análisis porque no contienen información válida sobre el estudio responsable —variable central de la Pregunta 1.
+
+**Paso 2: exclusión de contenido adulto.** Los animes clasificados con *rating* "Rx — Hentai" (1.557 registros) se excluyen del análisis. La justificación es metodológica: el contenido adulto presenta dinámicas de audiencia, de calificación y de fidelización marcadamente distintas a las del anime de consumo general, y su inclusión en la misma muestra distorsionaría tanto la interpretación de los resultados como la comparabilidad entre categorías.
+
+**Paso 3: restricción al formato TV.** El análisis se restringe al formato de serie televisiva (`Type = TV`). Esta restricción responde a dos consideraciones convergentes. Primero, el campo de año de estreno sólo está poblado de manera consistente para anime de tipo TV (en los demás formatos —Movie, OVA, ONA, Special— este campo está prácticamente ausente, posiblemente porque el archivo estacional de MAL del cual se extrajeron los datos sólo organiza explícitamente las series televisivas por temporadas). Segundo, los formatos no televisivos presentan modelos de consumo y patrones de calificación distintos —una película o una OVA tienen un ciclo de vida y una estructura narrativa diferente a la de una serie— que harían cuestionable agruparlos en un mismo modelo.
+
+**Paso 4: disponibilidad de las variables centrales.** Se conservan únicamente los registros con valores no faltantes en las cuatro variables principales del análisis: Score, Members, Favorites y año de estreno. Para registros con múltiples estudios listados, se atribuye la obra al primer estudio mencionado, que en MAL corresponde típicamente al estudio principal de la producción.
+
+**Paso 5: filtro de audiencia mínima para la Pregunta 2.** Para el modelo de la Pregunta 2 se aplica un filtro adicional que retiene únicamente las obras con al menos mil usuarios registrados (Members $\geq$ 1.000). La motivación es estadística: para audiencias muy pequeñas, la tasa Favorites/Members presenta una varianza desproporcionadamente alta que no aporta información útil al modelo —un anime con 50 Members y 1 Favorite produce una tasa "observada" del 2 %, pero esta cifra es esencialmente ruido. El umbral de mil usuarios elimina este régimen de inestabilidad sin sacrificar una fracción significativa de la muestra informativa: se conservan 4.487 anime de los 4.589 disponibles tras el Paso 4 (97,8 %).
+
+Adicionalmente, en el análisis descriptivo se aplica una agrupación de las dieciocho categorías originales del campo `Source` en cinco categorías analíticamente útiles. Específicamente, las categorías "Manga", "Web manga" y "4-koma manga" se agrupan como *Manga*; "Light novel", "Novel" y "Web novel" se agrupan como *Novel*; "Visual novel", "Game" y "Card game" se agrupan como *Game/VN*; "Original" se mantiene como categoría propia; el resto (Picture book, Book, Mixed media, Music, Radio, Other) se agrupa como *Other*. Esta reagrupación garantiza tamaños mínimos de muestra suficientes para estimar efectos diferenciales de manera estable.
+
+# Análisis Descriptivo
+
+## Visión general del subconjunto de estudio
+
+```{r}
+#| label: tab-filtrado
+#| tbl-cap: "Proceso de construcción del subconjunto de estudio."
+
+filtrado_resumen <- tibble::tribble(
+  ~Paso,                                                ~`N animes`,
+  "Dataset original (MyAnimeList, nov. 2025)",          nrow(df_raw),
+  "Tras excluir registros sin información básica",      nrow(df),
+  "Restringido a Tipo = TV",                            sum(df$Type == "TV", na.rm = TRUE),
+  "Con Score, Members, Favorites y Año disponibles",    n_main,
+  "Subconjunto Pregunta 2 (Members $\\geq$ 1000)",      n_p2
+)
+
+knitr::kable(
+  filtrado_resumen,
+  format.args = list(big.mark = ","),
+  booktabs = TRUE,
+  align = c("l", "r"),
+  escape = FALSE
+)
+```
+
+El subconjunto principal de estudio comprende `{r} format(n_main, big.mark=",")` animes, resultado de aplicar criterios de filtrado orientados a garantizar comparabilidad: restricción al formato TV (estandariza el modelo de consumo y la disponibilidad de información temporal), exclusión de contenido adulto (categoría con dinámicas de audiencia distintas) y eliminación de registros con identificadores corruptos en el campo Studios. Para la Pregunta 2 se aplica un filtro adicional de Members $\geq$ 1000, eliminando animes con audiencia trivial cuya tasa de favoritos no es estadísticamente informativa.
+
+```{r}
+#| label: fig-score-dist
+#| fig-cap: "Distribución del Score promedio en el subconjunto de estudio. La línea continua corresponde a la densidad estimada; la línea discontinua, a una densidad normal con la misma media y desviación estándar."
+#| fig-width: 6
+#| fig-height: 3.5
+
+mu_s <- mean(df_main$Score)
+sd_s <- sd(df_main$Score)
+
+ggplot(df_main, aes(x = Score)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 40, fill = "#4A6FA5", color = "white", alpha = 0.85) +
+  geom_density(color = "#1F2D3D", linewidth = 0.8) +
+  stat_function(
+    fun = dnorm, args = list(mean = mu_s, sd = sd_s),
+    color = "#C44536", linetype = "dashed", linewidth = 0.8
+  ) +
+  scale_x_continuous(breaks = seq(2, 10, 1), limits = c(2, 10)) +
+  labs(
+    x = "Score MAL", y = "Densidad",
+    subtitle = sprintf("n = %s ; media = %.2f ; sd = %.2f",
+                       format(n_main, big.mark=","), mu_s, sd_s)
+  )
+```
+
+La distribución del Score (Figura 1) es notablemente simétrica, con media `{r} round(mu_s, 2)` y desviación estándar `{r} round(sd_s, 2)`. El soporte empírico se concentra entre 4.5 y 8.5, lejos de los límites teóricos del rango \[0, 10\], y la densidad estimada se aproxima estrechamente a una normal de mismos parámetros. Este hallazgo es relevante para el modelado: dado que el Score reportado por MyAnimeList es ya un promedio sobre miles o millones de calificaciones individuales, su distribución agregada cumple aproximadamente las condiciones del Teorema Central del Límite, lo que sugiere que una verosimilitud normal es razonable para la Pregunta 1, sin necesidad de transformaciones de límites.
+
+```{r}
+#| label: fig-members-favs
+#| fig-cap: "Relación entre tamaño de la audiencia (Members) y número de favoritos absolutos (Favorites + 1, escala log10). Las líneas grises de referencia corresponden a tasas constantes de favoritos del 0.1%, 1% y 10%."
+#| fig-width: 6.5
+#| fig-height: 4.5
+
+ref_lines <- tibble::tibble(
+  rate  = c(0.001, 0.01, 0.10),
+  label = c("0.1%", "1%", "10%")
+)
+
+ggplot(df_main, aes(x = Members, y = Favorites + 1)) +
+  geom_point(alpha = 0.25, size = 0.8, color = "#4A6FA5") +
+  geom_abline(
+    data = ref_lines,
+    aes(slope = 1, intercept = log10(rate), linetype = label),
+    color = "grey50", linewidth = 0.4
+  ) +
+  scale_x_log10(labels = scales::label_comma()) +
+  scale_y_log10(labels = scales::label_comma()) +
+  scale_linetype_manual(
+    name   = "Tasa Favorites/Members",
+    values = c("0.1%" = "dotted", "1%" = "dashed", "10%" = "solid")
+  ) +
+  labs(x = "Members (escala log)", y = "Favorites + 1 (escala log)") +
+  theme(legend.position = "right")
+```
+
+La Figura 2 ilustra simultáneamente tres hechos centrales para la Pregunta 2. Primero, ambas variables presentan extrema heterogeneidad: Members varía desde decenas hasta varios millones (cuatro órdenes de magnitud), justificando el uso de escala logarítmica. Segundo, la nube de puntos se distribuye predominantemente entre las líneas de referencia del 0.1% y 1%, confirmando que la tasa típica de fidelización es de orden $10^{-3}$ a $10^{-2}$ — y que esta tasa varía sustancialmente entre obras. Tercero, la nube no se ajusta a una recta única: existe dispersión vertical considerable a cualquier nivel de Members, lo que constituye evidencia visual de la sobredispersión que motiva el uso de un modelo Beta-Binomial en lugar de un modelo binomial estándar.
+
+```{r}
+#| label: fig-cobertura-temporal
+#| fig-cap: "Distribución temporal del subconjunto de estudio por año de estreno."
+#| fig-width: 6
+#| fig-height: 3
+
+ggplot(df_main, aes(x = Year)) +
+  geom_histogram(binwidth = 2, fill = "#4A6FA5", color = "white") +
+  scale_x_continuous(breaks = seq(1960, 2025, 10)) +
+  labs(x = "Año de estreno", y = "Número de animes")
+```
+
+El subconjunto cubre obras estrenadas desde la década de 1960 hasta 2025, con una clara aceleración productiva a partir de los años 2000 que refleja el crecimiento global de la industria. Esta amplitud temporal introduce una potencial fuente de confusión en la Pregunta 2: animes recientes han tenido menos tiempo para acumular tanto Members como Favorites, y la dinámica de acumulación de cada métrica no es necesariamente proporcional. La Sección 4.3 explorará si existe un efecto sistemático del año sobre la tasa de favoritos.
+
+## Lado de la producción: estudios y material original
+
+```{r}
+#| label: fig-studios-distribution
+#| fig-cap: "Distribución del número de obras por estudio en el subconjunto de estudio. Panel izquierdo: top 20 estudios. Panel derecho: histograma del número de obras por estudio en escala log10."
+#| fig-width: 7.5
+#| fig-height: 4
+
+# Conteo de obras por estudio
+studios_count <- df_main %>%
+  count(Studio_primary, sort = TRUE) %>%
+  filter(Studio_primary != "")
+
+# Panel izquierdo: top 20
+p_left <- studios_count %>%
+  slice_head(n = 20) %>%
+  mutate(Studio_primary = forcats::fct_reorder(Studio_primary, n)) %>%
+  ggplot(aes(x = n, y = Studio_primary)) +
+  geom_segment(aes(x = 0, xend = n, yend = Studio_primary),
+               color = "grey70", linewidth = 0.4) +
+  geom_point(size = 2.2, color = "#4A6FA5") +
+  labs(x = "Número de obras (TV)", y = NULL,
+       subtitle = "Top 20 estudios") +
+  theme(plot.subtitle = element_text(size = 9))
+
+# Panel derecho: histograma del conteo (escala log)
+p_right <- studios_count %>%
+  ggplot(aes(x = n)) +
+  geom_histogram(bins = 30, fill = "#4A6FA5", color = "white") +
+  scale_x_log10(breaks = c(1, 2, 5, 10, 25, 50, 100, 250, 500)) +
+  labs(x = "Obras por estudio (escala log)", y = "Número de estudios",
+       subtitle = sprintf("Distribución sobre %d estudios únicos",
+                          nrow(studios_count))) +
+  theme(plot.subtitle = element_text(size = 9))
+
+p_left + p_right + plot_layout(widths = c(1, 1))
+```
+
+La Figura 4 revela la marcada heterogeneidad en la productividad de los estudios. El panel izquierdo muestra que un puñado de estudios (Toei Animation, J.C.Staff, Sunrise) concentra varios cientos de obras cada uno, mientras que el panel derecho —en escala logarítmica— evidencia que la distribución agregada es fuertemente asimétrica: la mediana de obras por estudio es de unas pocas unidades, y una proporción considerable de estudios tiene apenas una o dos producciones. Esta heterogeneidad extrema constituye el argumento central a favor de un enfoque jerárquico bayesiano: una estimación frecuentista por estudio asignaría la misma confianza a una media basada en 200 obras que a una media basada en 2, ignorando la diferencia drástica de información disponible. El mecanismo de *partial pooling* del modelo jerárquico aborda precisamente este problema, encogiendo las estimaciones de estudios poco informativos hacia el promedio global y preservando la individualidad de los estudios con evidencia abundante.
+
+```{r}
+#| label: fig-score-by-source
+#| fig-cap: "Distribución del Score según el material original adaptado. Las anotaciones indican el tamaño de muestra de cada categoría."
+#| fig-width: 6.5
+#| fig-height: 4
+
+# Conteos por categoría para anotación
+source_n <- df_main %>%
+  count(Source_grouped) %>%
+  mutate(label = sprintf("n = %d", n))
+
+ggplot(df_main, aes(x = Source_grouped, y = Score)) +
+  geom_violin(fill = "#4A6FA5", alpha = 0.35, color = NA) +
+  geom_boxplot(width = 0.18, fill = "white",
+               outlier.size = 0.6, outlier.alpha = 0.4) +
+  geom_text(data = source_n, aes(x = Source_grouped, y = 9.5, label = label),
+            size = 3, color = "grey30") +
+  scale_y_continuous(breaks = seq(2, 10, 1), limits = c(2, 10)) +
+  labs(x = "Material original", y = "Score MAL")
+```
+
+La Figura 5 sugiere que el material original adaptado guarda una asociación moderada con el Score. Las adaptaciones de Manga y Novelas (ligeras y convencionales) presentan medianas ligeramente superiores a las obras Originales, mientras que las adaptaciones de Juegos / Visual Novels muestran mayor variabilidad y una mediana algo más baja. Las diferencias entre categorías son visibles pero no dramáticas, lo que es consistente con la hipótesis de que el material original aporta información parcial al pronóstico de calidad —pero no determinante—; el resto de la variabilidad en Score puede atribuirse a otros factores, entre ellos el estudio responsable, lo que motiva incluir ambas variables en el modelo.
+
+```{r}
+#| label: fig-studio-source-heatmap
+#| fig-cap: "Frecuencia de obras por combinación Estudio × Material original (top 15 estudios). Las celdas vacías corresponden a combinaciones sin observaciones."
+#| fig-width: 7
+#| fig-height: 4.5
+
+# Top 15 estudios por número total de obras (en df_main, no global)
+top15_studios <- df_main %>%
+  count(Studio_primary, sort = TRUE) %>%
+  slice_head(n = 15) %>%
+  pull(Studio_primary)
+
+heatmap_data <- df_main %>%
+  filter(Studio_primary %in% top15_studios) %>%
+  count(Studio_primary, Source_grouped, name = "n") %>%
+  # Asegurar el orden de los estudios por total de obras (más arriba = más obras)
+  mutate(Studio_primary = factor(Studio_primary,
+                                 levels = rev(top15_studios)))
+
+ggplot(heatmap_data, aes(x = Source_grouped, y = Studio_primary, fill = n)) +
+  geom_tile(color = "white", linewidth = 0.3) +
+  geom_text(aes(label = n), size = 3, color = "white", fontface = "bold") +
+  scale_fill_gradient(low = "#B8C9DD", high = "#1F3D5A",
+                      name = "N obras") +
+  labs(x = "Material original", y = NULL) +
+  theme(panel.grid = element_blank(),
+        legend.position = "right")
+```
+
+La Figura 6 cuantifica la dispersión empírica del cruce Estudio × Material original sobre los 15 estudios más productivos. La estructura revela patrones claros: algunos estudios muestran una clara orientación hacia un tipo de material —Sunrise y Tatsunoko Production producen mayoritariamente obras Originales, mientras que Toei Animation, J.C.Staff y Studio Pierrot se inclinan fuertemente hacia adaptaciones de Manga—; otros como Madhouse o Studio Deen muestran un portafolio más diversificado a lo largo de varias categorías. Igualmente importante es la abundancia de celdas con frecuencia muy baja, particularmente en las categorías Novel y Game/VN: muchas combinaciones Estudio × Source están escasamente representadas (varias con menos de 5 obras), e incluso aparecen combinaciones sin observaciones, lo que reafirma la dificultad de obtener estimaciones puntuales confiables para cada celda y refuerza el caso para un modelo que combine información a través de la estructura jerárquica.
+
+```{r}
+#| label: fig-studio-score-ci
+#| fig-cap: "Score promedio por estudio (top 15 por número de obras), con intervalo de confianza frecuentista al 95% basado en el error estándar de la media. La línea vertical discontinua marca el promedio global. El número entre paréntesis indica el tamaño de muestra."
+#| fig-width: 6.5
+#| fig-height: 4.5
+
+global_mean <- mean(df_main$Score)
+
+studio_summary <- df_main %>%
+  filter(Studio_primary %in% top15_studios) %>%
+  group_by(Studio_primary) %>%
+  summarise(
+    n       = n(),
+    mean_s  = mean(Score),
+    sd_s    = sd(Score),
+    se_s    = sd_s / sqrt(n),
+    lower   = mean_s - 1.96 * se_s,
+    upper   = mean_s + 1.96 * se_s,
+    .groups = "drop"
+  ) %>%
+  mutate(
+    label = sprintf("%s (n=%d)", Studio_primary, n),
+    label = forcats::fct_reorder(label, mean_s)
+  )
+
+ggplot(studio_summary, aes(x = mean_s, y = label)) +
+  geom_vline(xintercept = global_mean,
+             linetype = "dashed", color = "grey40", linewidth = 0.4) +
+  geom_errorbarh(aes(xmin = lower, xmax = upper),
+                 height = 0, color = "#4A6FA5", linewidth = 0.6) +
+  geom_point(aes(size = n), color = "#1F3D5A") +
+  scale_size_continuous(range = c(1.5, 4), guide = "none") +
+  scale_x_continuous(breaks = seq(5, 9, 0.5)) +
+  annotate("text", x = global_mean, y = 0.7,
+           label = sprintf("Promedio global = %.2f", global_mean),
+           size = 2.8, color = "grey30", hjust = -0.05) +
+  coord_cartesian(clip = "off") +
+  labs(x = "Score promedio (con IC 95% frecuentista)", y = NULL) +
+  theme(plot.margin = margin(5.5, 5.5, 15, 5.5))
+```
+
+La Figura 7 sintetiza el problema central que motiva el enfoque bayesiano. Cada punto representa la media muestral del Score para uno de los 15 estudios más productivos; las barras horizontales son intervalos de confianza frecuentistas al 95% calculados sobre el error estándar de la media. Tres observaciones se destacan. **Primero**, las medias muestrales se distribuyen entre aproximadamente 6.59 y 7.59, sugiriendo diferencias sistemáticas entre estudios: varios estudios presentan intervalos de confianza que **no incluyen el promedio global** (línea discontinua), tanto por encima (Bones, Production I.G, A-1 Pictures, Madhouse, J.C.Staff, Sunrise) como por debajo (Tatsunoko Production), lo que indica diferencias estadísticamente detectables en estos casos. **Segundo**, los intervalos de confianza varían notablemente en amplitud: estudios con mayor número de obras (Toei Animation con n=212, Sunrise con n=172) presentan intervalos estrechos, mientras que estudios con menos obras tienen intervalos considerablemente más anchos —lo que refleja correctamente la diferencia de información disponible, pero también sugiere que estudios intermedios (n entre 60 y 100) podrían beneficiarse de un mecanismo de combinación parcial de información. **Tercero**, esta figura está restringida a los 15 estudios con mayor número de obras; al considerar el conjunto completo de los 403 estudios presentes en la muestra —de los cuales más de 200 tienen menos de 5 obras— la inestabilidad de las estimaciones frecuentistas se vuelve aún más severa, situación que el *partial pooling* del modelo jerárquico bayesiano está específicamente diseñado para manejar.
+
+## Lado del consumo: géneros y fidelización
+
+```{r}
+#| label: tab-fav-rate
+#| tbl-cap: "Distribución de la tasa de favoritos (Favorites/Members) en el subconjunto de la Pregunta 2."
+
+fav_rate_summary <- tibble::tribble(
+  ~Estadística,                    ~Valor,
+  "Mínimo",                         min(df_p2$fav_rate),
+  "Percentil 25",                   quantile(df_p2$fav_rate, 0.25),
+  "Mediana",                        median(df_p2$fav_rate),
+  "Media",                          mean(df_p2$fav_rate),
+  "Percentil 75",                   quantile(df_p2$fav_rate, 0.75),
+  "Percentil 90",                   quantile(df_p2$fav_rate, 0.90),
+  "Percentil 99",                   quantile(df_p2$fav_rate, 0.99),
+  "Máximo",                         max(df_p2$fav_rate),
+  "Animes con tasa = 0",            sum(df_p2$fav_rate == 0),
+  "Animes con tasa > 1%",           sum(df_p2$fav_rate > 0.01),
+  "Animes con tasa > 5%",           sum(df_p2$fav_rate > 0.05)
+)
+
+fav_rate_summary <- fav_rate_summary %>%
+  mutate(
+    Valor = ifelse(
+      Estadística %in% c("Animes con tasa = 0", "Animes con tasa > 1%",
+                          "Animes con tasa > 5%"),
+      formatC(Valor, format = "d", big.mark = ","),
+      formatC(Valor * 100, format = "f", digits = 3) %>% paste0(" %")
+    )
+  )
+
+knitr::kable(
+  fav_rate_summary,
+  booktabs = TRUE,
+  align = c("l", "r"),
+  col.names = c("Estadística", "Valor")
+)
+```
+
+La Tabla 3 cuantifica con precisión la forma de la distribución de la tasa de fidelización. Tres rasgos son determinantes para el modelado. Primero, la tasa típica es muy baja: la mediana se sitúa en torno al 0.34%, y el 75% de los animes tiene una tasa inferior al 0.6%. Segundo, la distribución presenta una cola derecha pronunciada: el percentil 99 es aproximadamente diez veces la mediana, y el máximo observado supera el 9%. Tercero, una fracción no despreciable de animes presenta tasa exactamente cero, y muchas tasas se encuentran muy cerca de cero, lo que invalida un modelo binomial estándar (que asignaría a estas observaciones probabilidades excesivamente bajas) y motiva el uso de un modelo Beta-Binomial capaz de absorber la sobredispersión inducida por estos extremos.
+
+```{r}
+#| label: fig-fav-by-genre
+#| fig-cap: "Distribución de la tasa de favoritos (Favorites/Members) por género, para los 15 géneros más frecuentes. Los puntos individuales corresponden a animes; las cajas resumen la distribución por género. Los géneros están ordenados por mediana descendente. La línea vertical discontinua marca la mediana global."
+#| fig-width: 6.5
+#| fig-height: 5
+
+# Long-form data: cada anime aparece una vez por cada uno de sus géneros
+df_genre_long <- df_p2 %>%
+  separate_rows(Genres, sep = ",\\s*") %>%
+  filter(Genres %in% top_genres)
+
+# Mediana global de la tasa
+mediana_global <- median(df_p2$fav_rate)
+
+# Resumen por género para ordenar y anotar
+genre_summary <- df_genre_long %>%
+  group_by(Genres) %>%
+  summarise(
+    n        = n(),
+    mediana  = median(fav_rate),
+    .groups  = "drop"
+  ) %>%
+  arrange(desc(mediana)) %>%
+  mutate(label = sprintf("%s (n=%d)", Genres, n))
+
+# Reordenar el factor en df_genre_long
+df_genre_long <- df_genre_long %>%
+  mutate(Genres = factor(Genres, levels = rev(genre_summary$Genres)))
+
+# Para etiquetas en el eje y
+genre_labels <- setNames(genre_summary$label, genre_summary$Genres)
+
+ggplot(df_genre_long, aes(x = fav_rate, y = Genres)) +
+  geom_vline(xintercept = mediana_global,
+             linetype = "dashed", color = "grey40", linewidth = 0.4) +
+  geom_jitter(width = 0, height = 0.25, alpha = 0.10,
+              size = 0.5, color = "#4A6FA5") +
+  geom_boxplot(width = 0.55, fill = NA, color = "#1F3D5A",
+               outlier.shape = NA, linewidth = 0.45) +
+  scale_x_continuous(
+    labels = scales::label_percent(accuracy = 0.1),
+    trans = "log10",
+    breaks = c(0.0001, 0.001, 0.01, 0.05),
+    limits = c(0.00005, 0.10)
+  ) +
+  scale_y_discrete(labels = function(x) genre_labels[x]) +
+  annotate("text", x = mediana_global, y = 15.5,
+           label = sprintf("Mediana global = %.2f%%", mediana_global * 100),
+           size = 2.8, color = "grey30", hjust = -0.05) +
+  coord_cartesian(clip = "off") +
+  labs(x = "Tasa de favoritos (escala log)", y = NULL) +
+  theme(plot.margin = margin(15, 5.5, 5.5, 5.5))
+```
+
+La Figura 8 revela que existen diferencias sustanciales y sistemáticas entre géneros en términos de fidelización. Géneros como Suspense, Mystery, Drama y Sci-Fi tienden a presentar medianas claramente superiores a la mediana global, mientras que géneros más asociados al consumo masivo o casual—como Comedy, Gourmet o Ecchi— tienden a generar tasas de favoritos sustancialmente más bajas. Una observación particularmente interesante es la convivencia, dentro de cada género, de una amplia dispersión: incluso géneros con mediana baja contienen animes con tasas de fidelización extraordinariamente altas (varias veces la mediana), evidenciando que el género impone una distribución de probabilidad sobre la fidelización, no un valor determinístico. Esta estructura es precisamente la que justifica un modelo de regresión bayesiano sobre la tasa de favoritos: estimar el efecto medio del género sobre el log-odds de la fidelización, controlando simultáneamente por otras fuentes de variación. Asimismo, dado que un mismo anime suele tener varias etiquetas de género simultáneamente (Action + Adventure + Fantasy es una combinación común), las observaciones individuales aparecen replicadas en distintos géneros en esta figura; en el modelo, esta multiplicidad se manejará mediante variables indicadoras simultáneas y priors débilmente informativos que regularizan los efectos de géneros correlacionados.
+
+```{r}
+#| label: fig-fav-vs-year
+#| fig-cap: "Tasa de favoritos en función del año de estreno. Cada punto representa un anime; la línea suavizada (LOESS) resume la tendencia central. La caída pronunciada en años recientes refleja un efecto de acumulación temporal, no necesariamente una caída en la calidad del contenido."
+#| fig-width: 6.5
+#| fig-height: 4
+
+ggplot(df_p2, aes(x = Year, y = fav_rate)) +
+  geom_point(alpha = 0.18, size = 0.6, color = "#4A6FA5") +
+  geom_smooth(method = "loess", span = 0.4,
+              color = "#C44536", fill = "#E5B5AC",
+              linewidth = 0.8, se = TRUE) +
+  scale_y_continuous(
+    labels = scales::label_percent(accuracy = 0.1),
+    trans = "log10",
+    breaks = c(0.0001, 0.001, 0.01, 0.05),
+    limits = c(0.00005, 0.10)
+  ) +
+  scale_x_continuous(breaks = seq(1970, 2025, 10)) +
+  labs(x = "Año de estreno", y = "Tasa de favoritos (escala log)")
+```
+
+La Figura 9 ofrece un hallazgo descriptivo inesperado y relevante para el modelado. Contrariamente a la hipótesis inicial de que los animes recientes presentarían tasas de favoritos sistemáticamente más bajas debido a un efecto de acumulación temporal —dado que la métrica Favorites debería tardar más en consolidarse que Members—, la curva suavizada (LOESS) muestra una tendencia central notablemente plana a lo largo de cinco décadas, con la mediana oscilando en un rango estrecho en torno al 0.3 %–0.4 %. Una posible explicación es que el filtro Members $\geq$ 1000 aplicado a este subconjunto excluye animes demasiado recientes para haber consolidado su audiencia, mitigando así por construcción el sesgo temporal. Otra explicación complementaria es que tanto Members como Favorites podrían seguir dinámicas de acumulación de velocidades comparables, dado que añadir un anime a la lista de seguimiento típicamente requiere haberlo visto al menos parcialmente.
+
+Este hallazgo no implica que el año de estreno deba excluirse del modelo; por el contrario, justifica incluirlo como variable de control para descartar formalmente efectos temporales más sutiles —por ejemplo, posibles interacciones género × año asociadas al auge de ciertos subgéneros (como Isekai dentro de Fantasy en años recientes) o cambios en las normas de calificación de la comunidad MAL. La incorporación del año como covariable funcionará entonces como una salvaguarda metodológica: si el efecto resulta marginal en la inferencia bayesiana, se podrá reportar con tranquilidad; si surge una interacción no visible en la marginal, el modelo la capturará.
+
+## Comparación cruzada: ¿calidad y fidelización son la misma cosa?
+
+```{r}
+#| label: fig-score-vs-favrate
+#| fig-cap: "Relación entre Score MAL (eje x) y tasa de favoritos (eje y, escala log) para cada anime del subconjunto de la Pregunta 2. Las líneas discontinuas marcan las medianas globales y definen cuatro cuadrantes. Los puntos rojos identifican animes representativos seleccionados por su popularidad (Members) dentro de cada cuadrante."
+#| fig-width: 7
+#| fig-height: 5
+
+library(ggrepel)
+
+# Subconjunto: usar df_p2 que ya tiene Members >= 1000 y fav_rate calculado
+score_median <- median(df_p2$Score)
+fav_median   <- median(df_p2$fav_rate)
+
+# Asignar cada anime a un cuadrante
+df_p2_q <- df_p2 %>%
+  mutate(
+    quadrant = case_when(
+      Score >= score_median & fav_rate >= fav_median ~ "Q1",
+      Score >= score_median & fav_rate <  fav_median ~ "Q2",
+      Score <  score_median & fav_rate >= fav_median ~ "Q3",
+      Score <  score_median & fav_rate <  fav_median ~ "Q4"
+    )
+  )
+
+# Animes representativos: 2 más populares por cuadrante (con tasa > 0 para escala log)
+labeled_animes <- df_p2_q %>%
+  filter(fav_rate > 0) %>%
+  group_by(quadrant) %>%
+  slice_max(Members, n = 2, with_ties = FALSE) %>%
+  ungroup() %>%
+  mutate(title_short = stringr::str_trunc(title, 28, side = "right"))
+
+# Correlaciones (Pearson y Spearman) para reportar en el texto
+cor_pearson  <- cor(df_p2_q$Score, log10(pmax(df_p2_q$fav_rate, 1e-6)),
+                    method = "pearson")
+cor_spearman <- cor(df_p2_q$Score, df_p2_q$fav_rate, method = "spearman")
+
+ggplot(df_p2_q, aes(x = Score, y = fav_rate)) +
+  geom_point(alpha = 0.20, size = 0.55, color = "#4A6FA5") +
+  geom_hline(yintercept = fav_median,
+             linetype = "dashed", color = "grey40", linewidth = 0.4) +
+  geom_vline(xintercept = score_median,
+             linetype = "dashed", color = "grey40", linewidth = 0.4) +
+  geom_point(data = labeled_animes,
+             color = "#C44536", size = 2.2) +
+  ggrepel::geom_text_repel(
+    data = labeled_animes,
+    aes(label = title_short),
+    size = 2.6, color = "grey15",
+    box.padding   = 0.6,
+    point.padding = 0.3,
+    segment.color = "grey50",
+    segment.size  = 0.3,
+    max.overlaps  = Inf,
+    min.segment.length = 0
+  ) +
+  scale_y_log10(
+    labels = scales::label_percent(accuracy = 0.1),
+    breaks = c(0.0001, 0.001, 0.01, 0.05),
+    limits = c(0.00005, 0.12)
+  ) +
+  scale_x_continuous(breaks = seq(2, 10, 1), limits = c(3, 10)) +
+  # Etiquetas de cuadrantes
+  annotate("text", x = 9.4, y = 0.07,
+           label = "Q1\nAlta calidad +\nAlta fidelización",
+           size = 2.6, fontface = "italic", color = "grey30",
+           hjust = 1, vjust = 1, lineheight = 0.95) +
+  annotate("text", x = 9.4, y = 0.00010,
+           label = "Q2\nAlta calidad +\nBaja fidelización",
+           size = 2.6, fontface = "italic", color = "grey30",
+           hjust = 1, vjust = 0, lineheight = 0.95) +
+  annotate("text", x = 3.2, y = 0.07,
+           label = "Q3\nBaja calidad +\nAlta fidelización",
+           size = 2.6, fontface = "italic", color = "grey30",
+           hjust = 0, vjust = 1, lineheight = 0.95) +
+  annotate("text", x = 3.2, y = 0.00010,
+           label = "Q4\nBaja calidad +\nBaja fidelización",
+           size = 2.6, fontface = "italic", color = "grey30",
+           hjust = 0, vjust = 0, lineheight = 0.95) +
+  labs(x = "Score MAL", y = "Tasa de favoritos (escala log)")
+```
+
+```{r}
+#| include: false
+# Diagnósticos para reporte en texto
+quad_counts <- df_p2_q %>% count(quadrant) %>% arrange(quadrant)
+```
+
+La Figura 10 condensa la pregunta central que motiva el diseño dual de este proyecto: ¿son la calidad evaluada (Score) y la fidelización profunda (tasa Favorites/Members) dos dimensiones distintas del éxito de un anime, o constituyen esencialmente la misma información expresada en escalas diferentes? La respuesta empírica es matizada. La correlación de Pearson entre el Score y log₁₀(tasa de favoritos) es 0.60, y la correlación de Spearman alcanza 0.73, indicando una asociación positiva moderada-alta y monótona pero claramente alejada de la unidad. En otras palabras: los animes mejor evaluados tienden, en promedio, a generar mayor fidelización profunda, pero una porción sustancial de la variabilidad de cada métrica es independiente de la otra. Esto descarta la posibilidad de que las dos preguntas de investigación sean redundantes.
+
+La distribución de los animes en los cuatro cuadrantes formados por las medianas globales (Score = 6.94, tasa de favoritos = 0.34 %) confirma cuantitativamente esta conclusión. Los cuadrantes "concordantes" Q1 (alta calidad y alta fidelización) y Q4 (baja calidad y baja fidelización) concentran aproximadamente el 78 % de la muestra, reflejando la correlación positiva subyacente. Sin embargo, el 22 % restante —distribuido casi simétricamente entre Q2 (alta calidad pero baja fidelización) y Q3 (baja calidad pero alta fidelización)— constituye un conjunto sustancial de obras (cerca de 1.000 animes) donde las dos dimensiones divergen abiertamente. Es precisamente en este 22 % donde las inferencias de las preguntas 1 y 2 producirían rankings sustancialmente distintos, y donde el valor del enfoque dual se manifiesta con mayor claridad.
+
+Los animes destacados en rojo —seleccionados como los más populares de cada cuadrante— ilustran de forma concreta los perfiles industriales subyacentes. En Q1 aparecen títulos como Shingeki no Kyojin (Attack on Titan) y Death Note, obras consagradas en el imaginario global del anime, donde excelencia evaluativa y devoción del público se refuerzan mutuamente. Q2 muestra un patrón observacional sugerente: ambos representantes —Shokugeki no Souma: Ni no Sara y Nanatsu no Taizai: Imashime no Fukkatsu— son secuelas, lo que podría indicar que las temporadas posteriores heredan grandes audiencias del éxito de la primera entrega pero raramente concentran sobre sí mismas el comportamiento de marcar como "favorita" —patrón digno de exploración complementaria. Q3, por su parte, contiene obras como Sword Art Online II y Kanojo, Okarishimasu, que combinan una calificación moderada con una tasa de favoritos elevada —perfil compatible con audiencias polarizadas pero con núcleos de seguidores intensamente comprometidos. Finalmente, Q4 incluye casos como las temporadas posteriores de Tokyo Ghoul:re, donde tanto la calificación promedio como la tasa de favoritos se sitúan por debajo de las medianas globales, reflejando obras que no logran consolidar ni excelencia evaluativa ni adhesión afectiva.
+
+Esta tipología empírica sustenta el diseño metodológico del proyecto. Si las dos métricas estuvieran fuertemente correlacionadas (por ejemplo, r \> 0.9), formular dos preguntas de investigación distintas constituiría redundancia analítica: los modelos producirían esencialmente el mismo ordenamiento de estudios y géneros, solo que en escalas diferentes. La asociación moderada observada (r = 0.60) garantiza, en cambio, que cada pregunta capte un aspecto genuinamente distinto del fenómeno: la Pregunta 1 identifica qué configuraciones productivas (estudio × material original) tienden a generar obras evaluadas como de alta calidad por la comunidad amplia, mientras que la Pregunta 2 identifica qué contenidos (géneros) generan vínculos afectivos profundos entre los espectadores que sí los consumen. En la sección de discusión del informe final, los resultados de ambos modelos se contrastarán explícitamente para identificar configuraciones donde un estudio o un género destaque en una dimensión pero no en la otra —lo que constituirá una de las contribuciones interpretativas centrales del proyecto.
+
+# Próximos pasos
+
+A partir de las observaciones empíricas presentadas en el análisis descriptivo, el desarrollo del informe final se estructurará en torno a la implementación, validación e interpretación de los modelos bayesianos correspondientes a cada una de las dos preguntas de investigación.
+
+Para la Pregunta 1, planeamos especificar un modelo jerárquico bayesiano de regresión sobre el Score, con verosimilitud normal —justificada por la aproximación a la normalidad observada en la Figura 1— y efectos por estudio, incluyendo el material original (Source) como covariable de interés. La estructura jerárquica implementará partial pooling sobre los efectos por estudio, abordando directamente la heterogeneidad muestral documentada en las Figuras 4 y 7. Variables como el número de episodios o el año de estreno podrán incorporarse como covariables adicionales para mejorar la calidad de la inferencia, sujeto a su contribución empírica.
+
+Para la Pregunta 2, planeamos especificar un modelo de regresión bayesiana sobre la proporción Favorites/Members con una verosimilitud capaz de manejar la sobredispersión —justificada por la dispersión vertical observada en la Figura 2 y por la presencia de tasas extremadamente bajas o nulas documentada en la Tabla 3—, efectos por género codificados como variables indicadoras múltiples, y controles por año de estreno y por el tamaño de la audiencia. Priors débilmente informativos sobre los efectos de género operarán como mecanismo de regularización ante la correlación esperable entre etiquetas frecuentemente co-ocurrentes.
+
+En ambos casos, el proceso analítico incorporará: chequeos predictivos previos para validar la razonabilidad de la estructura del modelo antes de la inferencia; diagnósticos estándar de convergencia de las cadenas MCMC ($\hat{R}$, número efectivo de muestras, transiciones divergentes); chequeos predictivos posteriores para evaluar el ajuste del modelo a los datos; análisis de sensibilidad respecto a la elección de priors —siguiendo las prácticas estándar del flujo de trabajo bayesiano descritas por @gelman2013bayesian y @mcelreath2020rethinking; e interpretación de los resultados mediante intervalos creíbles y distribuciones posteriores de cantidades de interés. Adicionalmente, en la sección de discusión del informe final se realizará un contraste explícito entre los hallazgos de los dos modelos, identificando configuraciones (estudios y géneros) donde la calidad evaluativa y la fidelización profunda divergen —en línea con la tipología empírica documentada en la Sección 4.4.
+
+# Referencias {.unnumbered}
+
+::: {#refs}
+:::
