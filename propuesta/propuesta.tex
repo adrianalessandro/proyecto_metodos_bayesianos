@@ -69,6 +69,7 @@
 
 
 \usepackage{longtable,booktabs,array}
+\newcounter{none} % for unnumbered tables
 \usepackage{calc} % for calculating minipage widths
 % Correct order of tables after \paragraph or \subparagraph
 \usepackage{etoolbox}
@@ -130,13 +131,13 @@
 \newcommand{\CSLIndent}[1]{\hspace{\cslhangindent}#1}
 
 \ifLuaTeX
-\usepackage[bidi=basic]{babel}
+\usepackage[bidi=basic,shorthands=off]{babel}
 \else
-\usepackage[bidi=default]{babel}
+\usepackage[bidi=default,shorthands=off]{babel}
 \fi
-% get rid of language-specific shorthands (see #6817):
-\let\LanguageShortHands\languageshorthands
-\def\languageshorthands#1{}
+\ifLuaTeX
+  \usepackage{selnolig} % disable illegal ligatures
+\fi
 
 
 \setlength{\emergencystretch}{3em} % prevent overfull lines
@@ -211,7 +212,7 @@
 \urlstyle{same}
 \hypersetup{
   pdftitle={Análisis Bayesiano de la Industria del Anime: Calidad Productiva y Fidelización de Audiencia},
-  pdfauthor={Nicolas Sanchez; Adrian Godoy; {[}Nombre{]}; {[}Nombre{]}},
+  pdfauthor={Nicolas Sanchez; Adrian Godoy; Cristobal Fuentes; Vicente Olivares},
   pdflang={es},
   colorlinks=true,
   linkcolor={NavyBlue},
@@ -230,8 +231,8 @@ y Fidelización de Audiencia}
 }
 \makeatother
 \subtitle{Propuesta de Proyecto --- Métodos Bayesianos}
-\author{Nicolas Sanchez \and Adrian
-Godoy \and {[}Nombre{]} \and {[}Nombre{]}}
+\author{Nicolas Sanchez \and Adrian Godoy \and Cristobal
+Fuentes \and Vicente Olivares}
 \date{11 de mayo de 2026}
 \begin{document}
 \maketitle
@@ -239,82 +240,55 @@ Godoy \and {[}Nombre{]} \and {[}Nombre{]}}
 
 \section{Introducción}\label{introducciuxf3n}
 
-La industria del anime constituye uno de los sectores creativos más
-sofisticados y de mayor proyección global del entretenimiento
-contemporáneo, con una estructura productiva altamente especializada y
-una base de audiencia internacional cuyos comportamientos de consumo
-presentan características distintivas frente a otras industrias
-audiovisuales. Comprender qué factores explican el éxito de un anime
----y, más sutilmente, qué se entiende por ``éxito''--- es una pregunta
-de relevancia tanto académica como industrial.
+La industria del anime es un sector de gran éxito mundial, con una
+audiencia global y formas de consumo muy particulares. Por ello,
+entender qué hace que un anime sea exitoso es una pregunta clave tanto
+para los fans como para la propia industria.
 
-Este proyecto adopta el enfoque de que el éxito de un anime no es un
-constructo unidimensional. Específicamente, distinguimos dos dimensiones
-empíricamente separables: la calidad evaluativa, expresada como el
-promedio de las calificaciones individuales otorgadas por los usuarios,
-y la fidelización profunda, expresada como la proporción de usuarios
-alcanzados que llegan a establecer un vínculo afectivo identificable con
-la obra. Estas dos dimensiones, como mostraremos en el análisis
-descriptivo, están correlacionadas pero no son equivalentes: existe una
-fracción sustancial de obras donde divergen abiertamente, lo que
-justifica estudiarlas como fenómenos distintos y no como dos medidas del
-mismo objeto.
+En este proyecto, consideramos que el ``éxito'' de un anime se puede
+medir de dos formas: por la calidad que percibe el público (las notas
+que le dan) y por la fidelidad de la audiencia (la proporción de
+espectadores que lo marcan como favorito). Aunque un anime con buena
+nota suele tener muchos fans, esto no siempre es así: hay series muy
+populares que pocos marcan como favoritas, y series de nicho con fans
+muy apasionados. Esta diferencia nos motiva a estudiar ambas medidas por
+separado.
 
-A partir de esta distinción, formulamos dos preguntas de investigación
-complementarias ---una orientada al lado de la producción, otra al lado
-del consumo--- y proponemos abordarlas mediante modelos bayesianos
-jerárquicos y de regresión sobre proporciones. La presente propuesta
-detalla el contexto del problema, las preguntas centrales, el conjunto
-de datos disponible, los criterios de construcción de la muestra de
-estudio y los resultados de un análisis descriptivo extensivo orientado
-a justificar las decisiones de modelado del informe final.
+Para esto, planteamos dos grandes preguntas de investigación: una
+enfocada en quién hace el anime (los estudios) y otra en quién lo
+consume (la audiencia). Las responderemos usando estadística bayesiana.
+En este documento detallamos el contexto, explicamos qué datos usamos,
+cómo los limpiamos y presentamos un análisis inicial que sirve de base
+para nuestro trabajo posterior.
 
 \section{Contexto y Preguntas de
 Investigación}\label{contexto-y-preguntas-de-investigaciuxf3n}
 
 \subsection{Contexto del fenómeno}\label{contexto-del-fenuxf3meno}
 
-La industria del anime ha alcanzado una escala económica y cultural
-considerable. De acuerdo con la Asociación de Animación Japonesa (AJA)
-(2024-\/-2025), el mercado global del anime ---considerando ventas
-internas, licencias internacionales, mercancía derivada y servicios de
-distribución digital--- alcanzó un valor de mercado récord de 3,84
-billones de yenes (aproximadamente 25 mil millones de dólares
-estadounidenses) en 2024, con un crecimiento sostenido impulsado en
-buena medida por la expansión de plataformas de streaming
-internacionales y por la consolidación de comunidades de fans fuera de
-Japón. En este ecosistema, las decisiones de inversión en nuevas
-producciones se apoyan en métricas observables tanto sobre la recepción
-crítica como sobre la profundidad del compromiso de la audiencia.
+El mercado global del anime es gigante; generó cerca de 25 mil millones
+de dólares en 2024 (2024-\/-2025), impulsado en gran parte por las
+plataformas de streaming. En este negocio, decidir qué producir depende
+mucho de estudiar qué le gusta a la gente y qué tan fieles son a las
+series.
 
-En este contexto industrial, dos preguntas de naturaleza distinta
----pero estrechamente relacionadas--- resultan particularmente
-relevantes. La primera se sitúa en el lado de la producción: existen
-estudios de animación con larga trayectoria que se han especializado en
-distintos tipos de obras (adaptaciones de manga, novelas ligeras,
-novelas visuales, videojuegos, o producciones originales), y es
-razonable preguntarse si esta especialización se traduce en diferencias
-sistemáticas en la calidad evaluativa de sus producciones ---es decir,
-si existen ``ventajas'' identificables de cierto estudio para cierto
-tipo de material. La segunda se sitúa en el lado del consumo: en una
-industria donde la popularidad masiva (medida por la audiencia
-alcanzada) y la fidelización profunda (medida por la intensidad del
-compromiso emocional) son métricas que no necesariamente coinciden,
-conviene preguntarse qué géneros narrativos generan mayor identificación
-afectiva entre los espectadores que los consumen, una vez controlado el
-efecto del simple alcance comercial.
+Ante esto, surgen dos dudas principales. Primero, desde la
+\textbf{producción}: hay muchos estudios de animación que se han
+especializado en adaptar mangas, novelas o crear historias originales.
+Nos preguntamos si esto se nota en la calidad final; es decir, ¿hay
+estudios que son mejores produciendo ciertas cosas? Segundo, desde el
+\textbf{consumo}: sabemos que un anime puede ser muy visto, pero no
+necesariamente amado. Nos interesa saber qué géneros narrativos logran
+atrapar más el ``corazón'' del público, independientemente de que la
+serie sea muy conocida o no.
 
-Ambas preguntas comparten una característica metodológica común:
-involucran comparaciones entre numerosas categorías (más de 400
-estudios, 21 géneros principales) con tamaños muestrales muy desiguales
----desde estudios con cientos de obras hasta géneros de nicho con apenas
-decenas de animes. Este desbalance hace que los enfoques estadísticos
-clásicos produzcan estimaciones inestables para las categorías menos
-representadas, mientras que los métodos bayesianos jerárquicos
----mediante el mecanismo de partial pooling--- permiten combinar
-información a través de las categorías de forma estadísticamente
-principada, ofreciendo además una cuantificación natural de la
-incertidumbre asociada a cada inferencia.
+Para responder a estas preguntas nos enfrentamos a un reto estadístico:
+tenemos datos de estudios que han hecho cientos de animes, pero otros
+que han hecho muy pocos. Esto dificulta usar métodos estadísticos
+tradicionales. Sin embargo, los métodos bayesianos jerárquicos permiten
+tomar información prestada entre categorías (lo que se conoce como
+\emph{partial pooling}), dándonos estimaciones mucho más robustas y
+manejables cuando hay pocos datos.
 
 \subsection{Preguntas de
 investigación}\label{preguntas-de-investigaciuxf3n}
@@ -328,224 +302,122 @@ consumo y se centra en la fidelización profunda.
 \subsubsection{Pregunta 1 --- Lado de la
 producción}\label{pregunta-1-lado-de-la-producciuxf3n}
 
-\textbf{¿Existen diferencias sistemáticas en el nivel de calidad típico
----medido a través del Score promedio en MyAnimeList--- entre los
-distintos estudios de animación cuando adaptan diferentes tipos de
-material original (manga, novela ligera, novela visual, videojuego u
-obra original)?}
+\textbf{¿Qué tanta diferencia de calidad (según la nota en MyAnimeList)
+existe entre los distintos estudios de animación cuando adaptan
+diferentes tipos de material (manga, novela, videojuego, etc.)?}
 
-La industria del anime es un sistema productivo altamente especializado
-en el que distintos estudios han desarrollado a lo largo de décadas
-capacidades técnicas y estilísticas particulares. Una pregunta central
-tanto para inversores como para productores es si esa especialización se
-traduce en una ventaja real al adaptar ciertos tipos de obras
-originales, o si la calidad del producto final depende principalmente
-del propio material de origen y no del estudio responsable.
-
-Investigamos si los estudios presentan diferencias sistemáticas en el
-nivel de calidad típico de sus producciones, controlando por el tipo de
-material adaptado y por covariables estructurales relevantes. El número
-de obras producidas por cada estudio varía drásticamente ---desde unos
-pocos títulos hasta varios cientos---, lo que vuelve poco confiables las
-estimaciones frecuentistas para estudios con escasa producción. Un
-modelo jerárquico bayesiano permite encoger (partial pooling) las
-estimaciones de estudios con poca evidencia hacia el promedio global,
-distinguiendo así diferencias reales de fluctuaciones por azar y
-preservando la individualidad de los estudios con evidencia abundante.
-
-Planeamos abordar esta pregunta mediante un modelo de regresión
-jerárquico bayesiano con efectos por estudio sobre el Score, incluyendo
-el material original como covariable de interés. La especificación
-detallada del modelo se desarrollará en el informe final, sobre la base
-de las observaciones empíricas presentadas en el análisis descriptivo.
+En el mundo del anime, los estudios suelen especializarse. Queremos
+saber si esta especialización realmente se nota en la calidad del
+producto final o si depende más del material original. Trataremos de ver
+si hay estudios que destaquen sistemáticamente, usando un modelo
+bayesiano que nos permita incluir incluso a aquellos estudios que han
+producido muy pocas series, compensando su falta de datos con el
+promedio general.
 
 \subsubsection{Pregunta 2 --- Lado del
 consumo}\label{pregunta-2-lado-del-consumo}
 
-\textbf{¿Qué géneros narrativos están asociados a mayor fidelización
-profunda ---medida como la proporción Favorites/Members--- entre la
-audiencia, una vez controlados el tamaño absoluto del público y los
-posibles efectos de acumulación temporal?}
+\textbf{¿Qué géneros logran una mayor fidelidad (proporción de favoritos
+sobre el total de espectadores), independientemente de la popularidad
+general de la serie?}
 
-En la industria del entretenimiento, la popularidad masiva (cantidad de
-usuarios alcanzados) y la fidelización profunda (intensidad del
-compromiso emocional) son dimensiones distintas del éxito. Un anime
-puede ser muy visto sin generar identificación fuerte, mientras que otro
-puede tener una audiencia reducida pero altamente comprometida
----distinción central para decisiones de mercadotecnia, desarrollo de
-mercancía derivada y construcción de comunidades de fans.
-
-Estudiamos qué géneros narrativos están asociados con mayores tasas de
-fidelización profunda, definidas como la proporción de usuarios que
-marcan un anime como favorito sobre el total de usuarios que lo
-registran en su lista. La razón Favorites/Members presenta
-sobredispersión sustancial ---pues las decisiones individuales de los
-usuarios están correlacionadas dentro de un mismo anime por efectos de
-comunidad y recomendación--- y una fracción importante de animes
-presenta tasas de fidelización muy bajas o nulas, condiciones que
-invalidan un modelo binomial estándar. El enfoque bayesiano permite
-incorporar priors débilmente informativos para regularizar los efectos
-de géneros altamente correlacionados (un mismo anime suele tener varias
-etiquetas simultáneas) y cuantificar directamente la incertidumbre del
-ranking de géneros mediante la distribución posterior.
-
-Planeamos abordar esta pregunta mediante un modelo de regresión
-bayesiana sobre la proporción de favoritos, capaz de manejar
-sobredispersión, controlando por el año de estreno y el tipo de obra. La
-especificación detallada se desarrollará en el informe final.
+Sabemos que una serie muy popular no siempre genera fans ``leales''. Un
+anime puede ser visto por muchos pero pasar al olvido, mientras que otro
+menos conocido puede convertirse en obra de culto. Queremos averiguar
+qué géneros logran esta conexión emocional más fuerte. Usaremos un
+modelo estadístico que maneje bien el hecho de que algunas tasas de
+fidelidad son extremadamente bajas, controlando por el año de estreno
+del anime.
 
 \section{Datos}\label{datos}
 
 \subsection{Procedencia y muestra}\label{procedencia-y-muestra}
 
-Los datos utilizados en este proyecto provienen del sitio MyAnimeList
-(MAL) (MyAnimeList LLC 2025), una de las plataformas comunitarias más
-grandes del mundo dedicada al seguimiento, calificación y discusión de
-obras de anime y manga. MyAnimeList constituye un repositorio
-particularmente rico para el análisis cuantitativo del anime: combina
-metadatos productivos curados editorialmente (estudio, productor,
-material original, fecha de estreno, género) con métricas agregadas de
-comportamiento de los usuarios (calificación promedio, número de
-usuarios que registran la obra en su lista, número de usuarios que la
-marcan como favorita).
+Usamos datos de MyAnimeList (MAL) (MyAnimeList LLC 2025), una plataforma
+gigantesca donde los usuarios registran, califican y discuten animes.
+MAL es una fuente muy rica porque mezcla datos oficiales de producción
+(estudio, género, fechas) con datos reales de consumo (cuánta gente ve
+la serie, qué notas le pone y cuántos la marcan como favorita).
 
-El conjunto de datos específico empleado fue publicado en Kaggle bajo el
-título \emph{MyAnimeList 2025} (Apriansyah 2025) y corresponde a una
-extracción automatizada realizada en noviembre de 2025 sobre el archivo
-estacional de MAL (\emph{Season Archive}). El dataset original contiene
-\textbf{19.931 registros únicos de anime} y \textbf{25 variables} que
-combinan campos de identificación, metadatos productivos, métricas de
-audiencia e información estructurada sobre personajes. La cobertura
-comprende obras estrenadas desde la década de 1960 hasta el año 2025, en
-distintos formatos (TV, película, OVA, ONA, especiales).
-
-Para los objetivos analíticos de este proyecto, se trabaja sobre un
-subconjunto cuidadosamente filtrado del dataset original. La
-construcción de este subconjunto se detalla en la Sección 3.3, y el
-resultado final es una muestra de aproximadamente \textbf{4.500 anime de
-tipo TV} sobre la cual se centran ambos modelos del proyecto.
+Trabajamos con el dataset \emph{MyAnimeList 2025} de Kaggle (Apriansyah
+2025), que contiene casi 20.000 animes desde la década de 1960 hasta
+2025. Luego de limpiar la base, nos quedamos con una selección de
+aproximadamente \textbf{4.500 series de televisión} sobre las cuales
+haremos el estudio.
 
 \subsection{Definición de variables}\label{definiciuxf3n-de-variables}
 
-La Tabla 1 resume las variables utilizadas en el análisis, agrupadas
-según su rol metodológico. Se incluyen únicamente las variables del
-dataset original que efectivamente se emplean en alguno de los dos
-modelos o en el análisis descriptivo; campos auxiliares (URL de imagen,
-identificador interno de MAL, lista de personajes en formato JSON,
-descripción narrativa) se excluyen de esta tabla por no aportar al
-análisis estadístico.
+La Tabla 1 resume las variables principales que usamos. Hemos quitado
+del listado a aquellas que no aportan al análisis estadístico (como
+descripciones largas o URLs).
 
-\begin{longtable}[t]{>{\raggedright\arraybackslash}p{2.2cm}>{\raggedright\arraybackslash}p{2.8cm}>{\raggedright\arraybackslash}p{3.0cm}>{\raggedright\arraybackslash}p{6.5cm}}
-\caption{Definición y rol de las variables utilizadas en el análisis.}\tabularnewline
+\begin{longtable}[t]{>{\raggedright\arraybackslash}p{2.2cm}>{\raggedright\arraybackslash}p{12cm}}
+\caption{Variables utilizadas en el análisis.}\tabularnewline
 
 \toprule
-Variable & Tipo & Rol & Descripción\\
+Variable & Descripción\\
 \midrule
-Score & Numérica continua & Respuesta (Pregunta 1) & Calificación promedio en escala 0–10, agregada sobre las puntuaciones individuales de los usuarios de MAL.\\
-Favorites & Numérica entera & Respuesta (Pregunta 2) & Número de usuarios que marcaron el anime como favorito.\\
-Members & Numérica entera & Exposición (Pregunta 2) & Número total de usuarios que registraron el anime en su lista (en cualquier estado: visto, viendo, planeado, etc.).\\
-Studios & Categórica & Predictor (Pregunta 1) & Estudio(s) de animación responsables de la producción. Cuando hay múltiples, se atribuye al estudio listado en primer lugar.\\
-Source & Categórica & Predictor (Pregunta 1) & Tipo de material original adaptado: manga, novela ligera, novela, novela visual, videojuego, obra original, etc.\\
+Score & Nota del 0 al 10, de acuerdo al promedio de usuarios en MAL.\\
+Favorites & Número de personas que marcaron la serie como favorita.\\
+Members & Número total de personas que tienen la serie en su lista.\\
+Studios & Estudio(s) encargado(s) de la animación.\\
+Source & Origen de la historia (manga, novela, original, etc.).\\
 \addlinespace
-Genres & Categórica multi-valor & Predictor (Pregunta 2) & Lista de géneros narrativos asignados al anime (separados por coma).\\
-Premiered & Texto estructurado & Predictor (Pregunta 2) & Temporada y año de estreno (ej. 'Fall 2023'). Se extrae el año como variable numérica.\\
-Type & Categórica & Filtro de muestra & Formato de la obra (TV, Movie, OVA, ONA, Special). El subconjunto de estudio se restringe a TV.\\
-Rating & Categórica & Filtro de muestra & Clasificación de contenido. Se utiliza para excluir contenido para adultos (Rx — Hentai) del análisis.\\
-Episodes & Numérica entera & Covariable potencial & Número total de episodios de la obra.\\
+Genres & Géneros narrativos de la serie.\\
+Premiered & Fecha de estreno, de donde sacamos el año.\\
+Type & Formato (TV, película, OVA). Nos quedaremos solo con TV.\\
+Rating & Clasificación por edad. Lo usamos para dejar fuera series para adultos ('Hentai').\\
+Episodes & Cuántos episodios tiene.\\
 \bottomrule
 \end{longtable}
 
-Adicionalmente, se construyen tres variables derivadas a partir de las
-anteriores. Primero, la \textbf{tasa de favoritos} se define como el
-cociente \(\text{Favorites}/\text{Members}\) y constituye la variable de
-respuesta operacional de la Pregunta 2. Segundo, el \textbf{año de
-estreno} se obtiene extrayendo los cuatro dígitos numéricos del campo
-\texttt{Premiered} (por ejemplo, ``Fall 2023'' → 2023). Tercero, la
-variable \texttt{Source} se reagrupa en cinco categorías más amplias
----\emph{Original}, \emph{Manga}, \emph{Novel}, \emph{Game/VN},
-\emph{Other}--- para mitigar la dispersión de las dieciocho categorías
-originales, muchas de las cuales presentan frecuencias muy bajas. Las
-decisiones específicas de agrupación se justifican en la Sección 3.3.
+También creamos tres variables nuevas: la \textbf{tasa de favoritos}
+(Favorites dividido por Members), el \textbf{año de estreno} en formato
+número, y agrupamos \textbf{Source} (el origen) en cinco grandes grupos:
+\emph{Original}, \emph{Manga}, \emph{Novel}, \emph{Game/VN} y
+\emph{Other}, para que el análisis sea más limpio.
 
 \subsection{Limpieza y reducción de la
 muestra}\label{limpieza-y-reducciuxf3n-de-la-muestra}
 
-La construcción del subconjunto de estudio sigue cinco pasos sucesivos,
-cada uno justificado por consideraciones sustantivas o metodológicas. La
-Tabla 2 (Sección 4.1) cuantifica el efecto de cada filtrado sobre el
-tamaño de la muestra.
+Para filtrar los datos, aplicamos los siguientes pasos (ver resumen en
+la Tabla 2):
 
-\textbf{Paso 1: exclusión de registros con valores corruptos en
-Studios.} La inspección del campo \texttt{Studios} reveló que
-aproximadamente 4.400 registros (cerca del 22 \% del dataset original)
-tienen como único valor la cadena literal ``add some''. Una inspección
-detallada de estos casos indica que se trata de un artefacto del proceso
-de raspado web: en MAL, cuando un anime no tiene estudio registrado
-oficialmente, la página muestra el texto ``+ Add some'' como un botón de
-invitación a la contribución comunitaria, y el raspador automatizado
-capturó este texto como si fuera el nombre del estudio. Estos registros
-se excluyen del análisis porque no contienen información válida sobre el
-estudio responsable ---variable central de la Pregunta 1.
-
-\textbf{Paso 2: exclusión de contenido adulto.} Los animes clasificados
-con \emph{rating} ``Rx --- Hentai'' (1.557 registros) se excluyen del
-análisis. La justificación es metodológica: el contenido adulto presenta
-dinámicas de audiencia, de calificación y de fidelización marcadamente
-distintas a las del anime de consumo general, y su inclusión en la misma
-muestra distorsionaría tanto la interpretación de los resultados como la
-comparabilidad entre categorías.
-
-\textbf{Paso 3: restricción al formato TV.} El análisis se restringe al
-formato de serie televisiva (\texttt{Type\ =\ TV}). Esta restricción
-responde a dos consideraciones convergentes. Primero, el campo de año de
-estreno sólo está poblado de manera consistente para anime de tipo TV
-(en los demás formatos ---Movie, OVA, ONA, Special--- este campo está
-prácticamente ausente, posiblemente porque el archivo estacional de MAL
-del cual se extrajeron los datos sólo organiza explícitamente las series
-televisivas por temporadas). Segundo, los formatos no televisivos
-presentan modelos de consumo y patrones de calificación distintos ---una
-película o una OVA tienen un ciclo de vida y una estructura narrativa
-diferente a la de una serie--- que harían cuestionable agruparlos en un
-mismo modelo.
-
-\textbf{Paso 4: disponibilidad de las variables centrales.} Se conservan
-únicamente los registros con valores no faltantes en las cuatro
-variables principales del análisis: Score, Members, Favorites y año de
-estreno. Para registros con múltiples estudios listados, se atribuye la
-obra al primer estudio mencionado, que en MAL corresponde típicamente al
-estudio principal de la producción.
-
-\textbf{Paso 5: filtro de audiencia mínima para la Pregunta 2.} Para el
-modelo de la Pregunta 2 se aplica un filtro adicional que retiene
-únicamente las obras con al menos mil usuarios registrados (Members
-\(\geq\) 1.000). La motivación es estadística: para audiencias muy
-pequeñas, la tasa Favorites/Members presenta una varianza
-desproporcionadamente alta que no aporta información útil al modelo
----un anime con 50 Members y 1 Favorite produce una tasa ``observada''
-del 2 \%, pero esta cifra es esencialmente ruido. El umbral de mil
-usuarios elimina este régimen de inestabilidad sin sacrificar una
-fracción significativa de la muestra informativa: se conservan 4.487
-anime de los 4.589 disponibles tras el Paso 4 (97,8 \%).
-
-Adicionalmente, en el análisis descriptivo se aplica una agrupación de
-las dieciocho categorías originales del campo \texttt{Source} en cinco
-categorías analíticamente útiles. Específicamente, las categorías
-``Manga'', ``Web manga'' y ``4-koma manga'' se agrupan como
-\emph{Manga}; ``Light novel'', ``Novel'' y ``Web novel'' se agrupan como
-\emph{Novel}; ``Visual novel'', ``Game'' y ``Card game'' se agrupan como
-\emph{Game/VN}; ``Original'' se mantiene como categoría propia; el resto
-(Picture book, Book, Mixed media, Music, Radio, Other) se agrupa como
-\emph{Other}. Esta reagrupación garantiza tamaños mínimos de muestra
-suficientes para estimar efectos diferenciales de manera estable.
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \textbf{Quitar estudios mal registrados:} Eliminamos unos 4.400 casos
+  donde el estudio aparecía como ``add some'' (un error del raspado web,
+  que tomó el botón de ``añadir estudio'' de MAL como si fuera un
+  nombre).
+\item
+  \textbf{Excluir contenido para adultos (Hentai):} Quitamos 1.557
+  registros porque sus dinámicas de consumo y notas son demasiado
+  distintas al anime normal, lo que ensuciaría los resultados.
+\item
+  \textbf{Dejar solo series de TV:} Las películas u OVAs se consumen y
+  califican de formas distintas, y muchas no tienen el año de estreno
+  bien registrado en los datos.
+\item
+  \textbf{Datos completos:} Dejamos solo los animes que tuvieran las
+  variables clave enteras (Score, Members, Favorites y año). Si una
+  serie tiene más de un estudio, nos quedamos con el primero que
+  aparece, que suele ser el principal.
+\item
+  \textbf{Mínimo de audiencia:} Para analizar la fidelidad (Pregunta 2),
+  exigimos que la serie tenga al menos 1.000 \emph{Members}. Las series
+  con menos público dan tasas de favoritismo muy inestables que solo
+  meten ``ruido'' al modelo.
+\end{enumerate}
 
 \section{Análisis Descriptivo}\label{anuxe1lisis-descriptivo}
 
-\subsection{Visión general del subconjunto de
-estudio}\label{visiuxf3n-general-del-subconjunto-de-estudio}
+\subsection{Visión general de los
+datos}\label{visiuxf3n-general-de-los-datos}
 
 \begin{longtable}[]{@{}lr@{}}
-\caption{Proceso de construcción del subconjunto de
-estudio.}\tabularnewline
+\caption{Resumen del filtrado de datos.}\tabularnewline
 \toprule\noalign{}
 Paso & N animes \\
 \midrule\noalign{}
@@ -563,15 +435,8 @@ Con Score, Members, Favorites y Año disponibles & 4,589 \\
 Subconjunto Pregunta 2 (Members \(\geq\) 1000) & 4,487 \\
 \end{longtable}
 
-El subconjunto principal de estudio comprende 4,589 animes, resultado de
-aplicar criterios de filtrado orientados a garantizar comparabilidad:
-restricción al formato TV (estandariza el modelo de consumo y la
-disponibilidad de información temporal), exclusión de contenido adulto
-(categoría con dinámicas de audiencia distintas) y eliminación de
-registros con identificadores corruptos en el campo Studios. Para la
-Pregunta 2 se aplica un filtro adicional de Members \(\geq\) 1000,
-eliminando animes con audiencia trivial cuya tasa de favoritos no es
-estadísticamente informativa.
+Nuestra base principal se quedó con 4,589 animes, y un poco menos para
+el análisis de fidelidad, debido al filtro de 1.000 usuarios mínimos.
 
 \begin{figure}[H]
 
@@ -581,23 +446,17 @@ estadísticamente informativa.
 
 }
 
-\caption{\label{fig-score-dist}Distribución del Score promedio en el
-subconjunto de estudio. La línea continua corresponde a la densidad
-estimada; la línea discontinua, a una densidad normal con la misma media
-y desviación estándar.}
+\caption{\label{fig-score-dist}Distribución de las notas (Score). La
+línea continua es la curva real; la discontinua, una curva normal normal
+teórica.}
 
 \end{figure}%
 
-La distribución del Score (Figura 1) es notablemente simétrica, con
-media 6.91 y desviación estándar 0.8. El soporte empírico se concentra
-entre 4.5 y 8.5, lejos de los límites teóricos del rango {[}0, 10{]}, y
-la densidad estimada se aproxima estrechamente a una normal de mismos
-parámetros. Este hallazgo es relevante para el modelado: dado que el
-Score reportado por MyAnimeList es ya un promedio sobre miles o millones
-de calificaciones individuales, su distribución agregada cumple
-aproximadamente las condiciones del Teorema Central del Límite, lo que
-sugiere que una verosimilitud normal es razonable para la Pregunta 1,
-sin necesidad de transformaciones de límites.
+La distribución del Score (Figura 1) es muy simétrica. La gran mayoría
+de las notas caen entre 4.5 y 8.5. Dado que estas notas ya son promedios
+de lo que votan miles de usuarios, siguen una curva muy cercana a lo que
+en estadística se llama \emph{distribución normal}. Esto nos facilita
+crear el modelo matemático para la Pregunta 1.
 
 \begin{figure}[H]
 
@@ -614,18 +473,13 @@ favoritos del 0.1\%, 1\% y 10\%.}
 
 \end{figure}%
 
-La Figura 2 ilustra simultáneamente tres hechos centrales para la
-Pregunta 2. Primero, ambas variables presentan extrema heterogeneidad:
-Members varía desde decenas hasta varios millones (cuatro órdenes de
-magnitud), justificando el uso de escala logarítmica. Segundo, la nube
-de puntos se distribuye predominantemente entre las líneas de referencia
-del 0.1\% y 1\%, confirmando que la tasa típica de fidelización es de
-orden \(10^{-3}\) a \(10^{-2}\) --- y que esta tasa varía
-sustancialmente entre obras. Tercero, la nube no se ajusta a una recta
-única: existe dispersión vertical considerable a cualquier nivel de
-Members, lo que constituye evidencia visual de la sobredispersión que
-motiva el uso de un modelo Beta-Binomial en lugar de un modelo binomial
-estándar.
+La Figura 2 nos muestra tres cosas importantes para la Pregunta 2.
+Primero, la gran diferencia en público que tienen las series (desde
+decenas a millones). Segundo, que lo normal es que solo entre el 0.1\% y
+el 1\% de los espectadores guarden la serie como favorita. Tercero, que
+los puntos están muy dispersos y no forman una línea perfecta, lo cual
+justifica el uso de un modelo estadístico un poco más flexible
+(Beta-Binomial) para manejar esta amplia variación.
 
 \begin{figure}[H]
 
@@ -635,19 +489,15 @@ estándar.
 
 }
 
-\caption{\label{fig-cobertura-temporal}Distribución temporal del
-subconjunto de estudio por año de estreno.}
+\caption{\label{fig-cobertura-temporal}Distribución de los animes
+incluidos en la muestra, según su año de estreno.}
 
 \end{figure}%
 
-El subconjunto cubre obras estrenadas desde la década de 1960 hasta
-2025, con una clara aceleración productiva a partir de los años 2000 que
-refleja el crecimiento global de la industria. Esta amplitud temporal
-introduce una potencial fuente de confusión en la Pregunta 2: animes
-recientes han tenido menos tiempo para acumular tanto Members como
-Favorites, y la dinámica de acumulación de cada métrica no es
-necesariamente proporcional. La Sección 4.3 explorará si existe un
-efecto sistemático del año sobre la tasa de favoritos.
+El subconjunto cubre obras desde los 60s, notándose claramente el
+``boom'' del anime a partir del 2000. Como las series más recientes han
+tenido menos tiempo para juntar fans o reseñas, usaremos el año de
+estreno en nuestros modelos para evitar que esto afecte los resultados.
 
 \subsection{Lado de la producción: estudios y material
 original}\label{lado-de-la-producciuxf3n-estudios-y-material-original}
@@ -661,27 +511,17 @@ original}\label{lado-de-la-producciuxf3n-estudios-y-material-original}
 }
 
 \caption{\label{fig-studios-distribution}Distribución del número de
-obras por estudio en el subconjunto de estudio. Panel izquierdo: top 20
-estudios. Panel derecho: histograma del número de obras por estudio en
-escala log10.}
+obras por estudio. Panel izquierdo: los 20 estudios con más obras. Panel
+derecho: cuántas obras hacen los estudios en su mayoría.}
 
 \end{figure}%
 
-La Figura 4 revela la marcada heterogeneidad en la productividad de los
-estudios. El panel izquierdo muestra que un puñado de estudios (Toei
-Animation, J.C.Staff, Sunrise) concentra varios cientos de obras cada
-uno, mientras que el panel derecho ---en escala logarítmica--- evidencia
-que la distribución agregada es fuertemente asimétrica: la mediana de
-obras por estudio es de unas pocas unidades, y una proporción
-considerable de estudios tiene apenas una o dos producciones. Esta
-heterogeneidad extrema constituye el argumento central a favor de un
-enfoque jerárquico bayesiano: una estimación frecuentista por estudio
-asignaría la misma confianza a una media basada en 200 obras que a una
-media basada en 2, ignorando la diferencia drástica de información
-disponible. El mecanismo de \emph{partial pooling} del modelo jerárquico
-aborda precisamente este problema, encogiendo las estimaciones de
-estudios poco informativos hacia el promedio global y preservando la
-individualidad de los estudios con evidencia abundante.
+La Figura 4 muestra una enorme diferencia entre estudios. Unos pocos
+``gigantes'' (como Toei, J.C.Staff, Sunrise) hacen cientos de series,
+pero la gran mayoría de los estudios han hecho apenas 1 o 2. Aquí es
+donde el modelo bayesiano brilla: no tratará igual el promedio de un
+estudio con 2 series que el de uno con 200, sino que usará la
+información general para estabilizar las notas de los estudios pequeños.
 
 \begin{figure}[H]
 
@@ -691,23 +531,16 @@ individualidad de los estudios con evidencia abundante.
 
 }
 
-\caption{\label{fig-score-by-source}Distribución del Score según el
-material original adaptado. Las anotaciones indican el tamaño de muestra
-de cada categoría.}
+\caption{\label{fig-score-by-source}Distribución de notas según la
+procedencia de la historia (Manga, Novela, etc.).}
 
 \end{figure}%
 
-La Figura 5 sugiere que el material original adaptado guarda una
-asociación moderada con el Score. Las adaptaciones de Manga y Novelas
-(ligeras y convencionales) presentan medianas ligeramente superiores a
-las obras Originales, mientras que las adaptaciones de Juegos / Visual
-Novels muestran mayor variabilidad y una mediana algo más baja. Las
-diferencias entre categorías son visibles pero no dramáticas, lo que es
-consistente con la hipótesis de que el material original aporta
-información parcial al pronóstico de calidad ---pero no determinante---;
-el resto de la variabilidad en Score puede atribuirse a otros factores,
-entre ellos el estudio responsable, lo que motiva incluir ambas
-variables en el modelo.
+La Figura 5 muestra que el material de origen afecta un poco a la nota.
+Las adaptaciones de mangas y novelas suelen ir un poquito mejor que las
+series 100\% originales. Sin embargo, la diferencia no es gigante, lo
+que nos confirma que será muy útil ver cuánto de la nota final depende
+del material y cuánto depende del estudio que lo anima.
 
 \begin{figure}[H]
 
@@ -755,38 +588,23 @@ muestra.}
 
 \end{figure}%
 
-La Figura 7 sintetiza el problema central que motiva el enfoque
-bayesiano. Cada punto representa la media muestral del Score para uno de
-los 15 estudios más productivos; las barras horizontales son intervalos
-de confianza frecuentistas al 95\% calculados sobre el error estándar de
-la media. Tres observaciones se destacan. \textbf{Primero}, las medias
-muestrales se distribuyen entre aproximadamente 6.59 y 7.59, sugiriendo
-diferencias sistemáticas entre estudios: varios estudios presentan
-intervalos de confianza que \textbf{no incluyen el promedio global}
-(línea discontinua), tanto por encima (Bones, Production I.G, A-1
-Pictures, Madhouse, J.C.Staff, Sunrise) como por debajo (Tatsunoko
-Production), lo que indica diferencias estadísticamente detectables en
-estos casos. \textbf{Segundo}, los intervalos de confianza varían
-notablemente en amplitud: estudios con mayor número de obras (Toei
-Animation con n=212, Sunrise con n=172) presentan intervalos estrechos,
-mientras que estudios con menos obras tienen intervalos
-considerablemente más anchos ---lo que refleja correctamente la
-diferencia de información disponible, pero también sugiere que estudios
-intermedios (n entre 60 y 100) podrían beneficiarse de un mecanismo de
-combinación parcial de información. \textbf{Tercero}, esta figura está
-restringida a los 15 estudios con mayor número de obras; al considerar
-el conjunto completo de los 403 estudios presentes en la muestra ---de
-los cuales más de 200 tienen menos de 5 obras--- la inestabilidad de las
-estimaciones frecuentistas se vuelve aún más severa, situación que el
-\emph{partial pooling} del modelo jerárquico bayesiano está
-específicamente diseñado para manejar.
+La Figura 7 nos da un resumen de este problema. Cada punto representa la
+nota promedio de los 15 estudios con más obras, con su margen de error
+(las barras horizontales). Notamos dos cosas clave: primero, sí hay
+diferencias entre estudios (algunos están sistemáticamente por encima
+del promedio, como Bones o Madhouse, y otros por debajo como Tatsunoko).
+Segundo, los estudios con pocas obras tienen barras de error enormes.
+Aquí solo mostramos el ``top 15''; si agregamos a los más de 200
+estudios que han hecho menos de 5 series, esas medias serían totalmente
+inestables. Por eso necesitamos el modelo bayesiano, que puede agrupar
+la información y entregar estimaciones más sensatas.
 
 \subsection{Lado del consumo: géneros y
 fidelización}\label{lado-del-consumo-guxe9neros-y-fidelizaciuxf3n}
 
 \begin{longtable}[]{@{}lr@{}}
-\caption{Distribución de la tasa de favoritos (Favorites/Members) en el
-subconjunto de la Pregunta 2.}\tabularnewline
+\caption{Distribución de la tasa de favoritos en las series
+analizadas.}\tabularnewline
 \toprule\noalign{}
 Estadística & Valor \\
 \midrule\noalign{}
@@ -810,18 +628,11 @@ Animes con tasa \textgreater{} 1\% & 520 \\
 Animes con tasa \textgreater{} 5\% & 8 \\
 \end{longtable}
 
-La Tabla 3 cuantifica con precisión la forma de la distribución de la
-tasa de fidelización. Tres rasgos son determinantes para el modelado.
-Primero, la tasa típica es muy baja: la mediana se sitúa en torno al
-0.34\%, y el 75\% de los animes tiene una tasa inferior al 0.6\%.
-Segundo, la distribución presenta una cola derecha pronunciada: el
-percentil 99 es aproximadamente diez veces la mediana, y el máximo
-observado supera el 9\%. Tercero, una fracción no despreciable de animes
-presenta tasa exactamente cero, y muchas tasas se encuentran muy cerca
-de cero, lo que invalida un modelo binomial estándar (que asignaría a
-estas observaciones probabilidades excesivamente bajas) y motiva el uso
-de un modelo Beta-Binomial capaz de absorber la sobredispersión inducida
-por estos extremos.
+La Tabla 3 nos muestra algo vital: la tasa típica de fidelidad es muy,
+muy baja. La mitad de las series logran retener apenas alrededor de un
+0.34 \% de favoritos, y muchas de ellas tienen directamente cero
+favoritos. Esto significa que debemos usar modelos que toleren estas
+cifras tan infladas cerca del 0.
 
 \begin{figure}[H]
 
@@ -831,35 +642,19 @@ por estos extremos.
 
 }
 
-\caption{\label{fig-fav-by-genre}Distribución de la tasa de favoritos
-(Favorites/Members) por género, para los 15 géneros más frecuentes. Los
-puntos individuales corresponden a animes; las cajas resumen la
-distribución por género. Los géneros están ordenados por mediana
-descendente. La línea vertical discontinua marca la mediana global.}
+\caption{\label{fig-fav-by-genre}Comparación de la tasa de favoritismo
+entre los distintos géneros.}
 
 \end{figure}%
 
-La Figura 8 revela que existen diferencias sustanciales y sistemáticas
-entre géneros en términos de fidelización. Géneros como Suspense,
-Mystery, Drama y Sci-Fi tienden a presentar medianas claramente
-superiores a la mediana global, mientras que géneros más asociados al
-consumo masivo o casual---como Comedy, Gourmet o Ecchi--- tienden a
-generar tasas de favoritos sustancialmente más bajas. Una observación
-particularmente interesante es la convivencia, dentro de cada género, de
-una amplia dispersión: incluso géneros con mediana baja contienen animes
-con tasas de fidelización extraordinariamente altas (varias veces la
-mediana), evidenciando que el género impone una distribución de
-probabilidad sobre la fidelización, no un valor determinístico. Esta
-estructura es precisamente la que justifica un modelo de regresión
-bayesiano sobre la tasa de favoritos: estimar el efecto medio del género
-sobre el log-odds de la fidelización, controlando simultáneamente por
-otras fuentes de variación. Asimismo, dado que un mismo anime suele
-tener varias etiquetas de género simultáneamente (Action + Adventure +
-Fantasy es una combinación común), las observaciones individuales
-aparecen replicadas en distintos géneros en esta figura; en el modelo,
-esta multiplicidad se manejará mediante variables indicadoras
-simultáneas y priors débilmente informativos que regularizan los efectos
-de géneros correlacionados.
+La Figura 8 nos dice que el género sí influye en cuán fiel se vuelve la
+audiencia. Géneros más de ``nicho'' o con tramas pesadas (como Suspenso,
+Misterio, Drama o Sci-Fi) logran una fidelidad mucho más alta que los
+enfocados al consumo rápido (como Comedia o Ecchi). Pero, dentro de cada
+género también hay mucha variación: un anime de Comedia aún puede volver
+muy fiel a su audiencia si está bien hecho. Puesto que un anime suele
+tener mezclados muchos géneros (ej. Acción + Aventura), manejaremos
+estas etiquetas múltiples en nuestro modelo.
 
 \begin{figure}[H]
 
@@ -869,39 +664,18 @@ de géneros correlacionados.
 
 }
 
-\caption{\label{fig-fav-vs-year}Tasa de favoritos en función del año de
-estreno. Cada punto representa un anime; la línea suavizada (LOESS)
-resume la tendencia central. La caída pronunciada en años recientes
-refleja un efecto de acumulación temporal, no necesariamente una caída
-en la calidad del contenido.}
+\caption{\label{fig-fav-vs-year}Tasa de favoritos a lo largo de los
+años.}
 
 \end{figure}%
 
-La Figura 9 ofrece un hallazgo descriptivo inesperado y relevante para
-el modelado. Contrariamente a la hipótesis inicial de que los animes
-recientes presentarían tasas de favoritos sistemáticamente más bajas
-debido a un efecto de acumulación temporal ---dado que la métrica
-Favorites debería tardar más en consolidarse que Members---, la curva
-suavizada (LOESS) muestra una tendencia central notablemente plana a lo
-largo de cinco décadas, con la mediana oscilando en un rango estrecho en
-torno al 0.3 \%--0.4 \%. Una posible explicación es que el filtro
-Members \(\geq\) 1000 aplicado a este subconjunto excluye animes
-demasiado recientes para haber consolidado su audiencia, mitigando así
-por construcción el sesgo temporal. Otra explicación complementaria es
-que tanto Members como Favorites podrían seguir dinámicas de acumulación
-de velocidades comparables, dado que añadir un anime a la lista de
-seguimiento típicamente requiere haberlo visto al menos parcialmente.
-
-Este hallazgo no implica que el año de estreno deba excluirse del
-modelo; por el contrario, justifica incluirlo como variable de control
-para descartar formalmente efectos temporales más sutiles ---por
-ejemplo, posibles interacciones género × año asociadas al auge de
-ciertos subgéneros (como Isekai dentro de Fantasy en años recientes) o
-cambios en las normas de calificación de la comunidad MAL. La
-incorporación del año como covariable funcionará entonces como una
-salvaguarda metodológica: si el efecto resulta marginal en la inferencia
-bayesiana, se podrá reportar con tranquilidad; si surge una interacción
-no visible en la marginal, el modelo la capturará.
+La Figura 9 nos deja un descubrimiento interesante: nosotros creíamos
+que los animes más nuevos tendrían tasas de favoritos más bajas, por
+tener menos tiempo en emisión. Pero la realidad es que la tasa general
+se ha mantenido súper estable a lo largo de las décadas, cerca del 0.3
+\%. Aun así, mantendremos el ``Año'' en el análisis para controlar
+posibles efectos en ciertas eras o en ciertos géneros de moda, como el
+``Isekai'' reciente.
 
 \subsection{Comparación cruzada: ¿calidad y fidelización son la misma
 cosa?}\label{comparaciuxf3n-cruzada-calidad-y-fidelizaciuxf3n-son-la-misma-cosa}
@@ -923,146 +697,93 @@ cada cuadrante.}
 
 \end{figure}%
 
-La Figura 10 condensa la pregunta central que motiva el diseño dual de
-este proyecto: ¿son la calidad evaluada (Score) y la fidelización
-profunda (tasa Favorites/Members) dos dimensiones distintas del éxito de
-un anime, o constituyen esencialmente la misma información expresada en
-escalas diferentes? La respuesta empírica es matizada. La correlación de
-Pearson entre el Score y log₁₀(tasa de favoritos) es 0.60, y la
-correlación de Spearman alcanza 0.73, indicando una asociación positiva
-moderada-alta y monótona pero claramente alejada de la unidad. En otras
-palabras: los animes mejor evaluados tienden, en promedio, a generar
-mayor fidelización profunda, pero una porción sustancial de la
-variabilidad de cada métrica es independiente de la otra. Esto descarta
-la posibilidad de que las dos preguntas de investigación sean
-redundantes.
+La Figura 10 resume la gran duda de nuestro proyecto: ¿la nota y el
+favoritismo miden exactamente lo mismo? La respuesta es no. Sí están
+relacionadas (las series con buena nota suelen tener más fans), pero hay
+muchísimas excepciones.
 
-La distribución de los animes en los cuatro cuadrantes formados por las
-medianas globales (Score = 6.94, tasa de favoritos = 0.34 \%) confirma
-cuantitativamente esta conclusión. Los cuadrantes ``concordantes'' Q1
-(alta calidad y alta fidelización) y Q4 (baja calidad y baja
-fidelización) concentran aproximadamente el 78 \% de la muestra,
-reflejando la correlación positiva subyacente. Sin embargo, el 22 \%
-restante ---distribuido casi simétricamente entre Q2 (alta calidad pero
-baja fidelización) y Q3 (baja calidad pero alta fidelización)---
-constituye un conjunto sustancial de obras (cerca de 1.000 animes) donde
-las dos dimensiones divergen abiertamente. Es precisamente en este 22 \%
-donde las inferencias de las preguntas 1 y 2 producirían rankings
-sustancialmente distintos, y donde el valor del enfoque dual se
-manifiesta con mayor claridad.
+Al dividir el gráfico en cuatro zonas con las medianas, vemos que casi
+un 22 \% de los animes (unas 1.000 series) rompen la regla. Por ejemplo,
+en rojo marcamos casos famosos: \textbf{Shingeki no Kyojin} tiene notas
+altísimas y muchísimos fans; \textbf{Shokugeki no Souma} tiene buena
+nota pero pocos lo marcan como favorito (quizás por ser una secuela).
+Por el contrario, series como \textbf{Kanojo, Okarishimasu} no tienen
+las mejores notas, pero su comunidad es increíblemente fiel.
 
-Los animes destacados en rojo ---seleccionados como los más populares de
-cada cuadrante--- ilustran de forma concreta los perfiles industriales
-subyacentes. En Q1 aparecen títulos como Shingeki no Kyojin (Attack on
-Titan) y Death Note, obras consagradas en el imaginario global del
-anime, donde excelencia evaluativa y devoción del público se refuerzan
-mutuamente. Q2 muestra un patrón observacional sugerente: ambos
-representantes ---Shokugeki no Souma: Ni no Sara y Nanatsu no Taizai:
-Imashime no Fukkatsu--- son secuelas, lo que podría indicar que las
-temporadas posteriores heredan grandes audiencias del éxito de la
-primera entrega pero raramente concentran sobre sí mismas el
-comportamiento de marcar como ``favorita'' ---patrón digno de
-exploración complementaria. Q3, por su parte, contiene obras como Sword
-Art Online II y Kanojo, Okarishimasu, que combinan una calificación
-moderada con una tasa de favoritos elevada ---perfil compatible con
-audiencias polarizadas pero con núcleos de seguidores intensamente
-comprometidos. Finalmente, Q4 incluye casos como las temporadas
-posteriores de Tokyo Ghoul:re, donde tanto la calificación promedio como
-la tasa de favoritos se sitúan por debajo de las medianas globales,
-reflejando obras que no logran consolidar ni excelencia evaluativa ni
-adhesión afectiva.
-
-Esta tipología empírica sustenta el diseño metodológico del proyecto. Si
-las dos métricas estuvieran fuertemente correlacionadas (por ejemplo, r
-\textgreater{} 0.9), formular dos preguntas de investigación distintas
-constituiría redundancia analítica: los modelos producirían
-esencialmente el mismo ordenamiento de estudios y géneros, solo que en
-escalas diferentes. La asociación moderada observada (r = 0.60)
-garantiza, en cambio, que cada pregunta capte un aspecto genuinamente
-distinto del fenómeno: la Pregunta 1 identifica qué configuraciones
-productivas (estudio × material original) tienden a generar obras
-evaluadas como de alta calidad por la comunidad amplia, mientras que la
-Pregunta 2 identifica qué contenidos (géneros) generan vínculos
-afectivos profundos entre los espectadores que sí los consumen. En la
-sección de discusión del informe final, los resultados de ambos modelos
-se contrastarán explícitamente para identificar configuraciones donde un
-estudio o un género destaque en una dimensión pero no en la otra ---lo
-que constituirá una de las contribuciones interpretativas centrales del
-proyecto.
+Esto justifica que necesitemos dos modelos distintos. Si la nota y la
+fidelidad fueran lo mismo, con un solo modelo bastaría. Como son cosas
+distintas, nuestros dos modelos nos ayudarán a entender qué mueve a cada
+una.
 
 \section{Próximos pasos}\label{pruxf3ximos-pasos}
 
-A partir de las observaciones empíricas presentadas en el análisis
-descriptivo, el desarrollo del informe final se estructurará en torno a
-la implementación, validación e interpretación de los modelos bayesianos
-correspondientes a cada una de las dos preguntas de investigación.
+Para el informe final, armaremos paso a paso los modelos bayesianos de
+ambas preguntas.
 
-Para la Pregunta 1, planeamos especificar un modelo jerárquico bayesiano
-de regresión sobre el Score, con verosimilitud normal ---justificada por
-la aproximación a la normalidad observada en la Figura 1--- y efectos
-por estudio, incluyendo el material original (Source) como covariable de
-interés. La estructura jerárquica implementará partial pooling sobre los
-efectos por estudio, abordando directamente la heterogeneidad muestral
-documentada en las Figuras 4 y 7. Variables como el número de episodios
-o el año de estreno podrán incorporarse como covariables adicionales
-para mejorar la calidad de la inferencia, sujeto a su contribución
-empírica.
+Para la \textbf{Pregunta 1} usaremos un modelo jerárquico asumiendo que
+las notas (Score) se distribuyen de manera ``Normal'' o campana de Gauss
+(como vimos en la Figura 1). Este modelo suavizará las notas de los
+estudios que han hecho pocos animes, ``tirándolas'' un poco hacia el
+promedio global para no sacar conclusiones apresuradas de un estudio con
+una sola obra exitosa. Controlaremos los resultados considerando si es
+un anime original, un manga adaptado, etc.
 
-Para la Pregunta 2, planeamos especificar un modelo de regresión
-bayesiana sobre la proporción Favorites/Members con una verosimilitud
-capaz de manejar la sobredispersión ---justificada por la dispersión
-vertical observada en la Figura 2 y por la presencia de tasas
-extremadamente bajas o nulas documentada en la Tabla 3---, efectos por
-género codificados como variables indicadoras múltiples, y controles por
-año de estreno y por el tamaño de la audiencia. Priors débilmente
-informativos sobre los efectos de género operarán como mecanismo de
-regularización ante la correlación esperable entre etiquetas
-frecuentemente co-ocurrentes.
+Para la \textbf{Pregunta 2} armaremos un modelo de proporciones para
+entender la fidelidad (Favoritos sobre Miembros). Como hay valores súper
+bajos y muchos ceros, el modelo tiene que estar preparado para manejar
+estas excepciones matemáticas. Incluiremos los géneros como grupos con
+variables de control sobre el año de estreno.
 
-En ambos casos, el proceso analítico incorporará: chequeos predictivos
-previos para validar la razonabilidad de la estructura del modelo antes
-de la inferencia; diagnósticos estándar de convergencia de las cadenas
-MCMC (\(\hat{R}\), número efectivo de muestras, transiciones
-divergentes); chequeos predictivos posteriores para evaluar el ajuste
-del modelo a los datos; análisis de sensibilidad respecto a la elección
-de priors ---siguiendo las prácticas estándar del flujo de trabajo
-bayesiano descritas por Gelman et~al. (2013) y McElreath (2020); e
-interpretación de los resultados mediante intervalos creíbles y
-distribuciones posteriores de cantidades de interés. Adicionalmente, en
-la sección de discusión del informe final se realizará un contraste
-explícito entre los hallazgos de los dos modelos, identificando
-configuraciones (estudios y géneros) donde la calidad evaluativa y la
-fidelización profunda divergen ---en línea con la tipología empírica
-documentada en la Sección 4.4.
+En ambos casos, haremos chequeos de rutina para validar que los modelos
+bayesianos corran sin problemas de matemáticas por detrás (chequeando
+convergencia) y revisaremos que predigan cosas que tengan sentido con la
+realidad de los datos. Al final, compararemos los resultados de ambos
+para ver si descubrimos estudios o géneros que sean reyes de la ``buena
+nota'' pero fracasen en ``fidelidad'', o viceversa.
+
+\section{Requisitos de Software y
+Librerías}\label{requisitos-de-software-y-libreruxedas}
+
+Para compilar y ejecutar este documento Quarto (\texttt{propuesta.qmd}),
+es necesario tener instalado lo siguiente:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{R y RStudio:} (o un visor de entorno compatible) para ejecutar
+  el código.
+\item
+  \textbf{Quarto:} Para compilar el documento en PDF y manejar el
+  formato.
+\end{itemize}
+
+\textbf{Librerías de R utilizadas:} - \texttt{tidyverse} (para
+manipulación general y gráficos \texttt{ggplot2}) - \texttt{knitr} (para
+formato de tablas) - \texttt{scales} (para etiquetado en ejes de
+gráficos) - \texttt{patchwork} (para juntar gráficos) -
+\texttt{kableExtra} (para formato avanzado de tablas PDF) -
+\texttt{ggrepel} (para evitar superposiciones en las etiquetas de texto
+del último gráfico) - \texttt{stringr} y \texttt{forcats} (usadas como
+parte de \texttt{tidyverse})
 
 \section*{Referencias}\label{referencias}
 \addcontentsline{toc}{section}{Referencias}
 
-\phantomsection\label{refs}
-\begin{CSLReferences}{1}{0}
+\protect\phantomsection\label{refs}
+\begin{CSLReferences}{1}{1}
 \bibitem[\citeproctext]{ref-apriansyah2025mal}
-Apriansyah, Syahrul. 2025. {«{MyAnimeList 2025}: Comprehensive {A}nime
-{D}ataset»}. Conjunto de datos en línea; Kaggle.
+Apriansyah, Syahrul. 2025. \emph{{MyAnimeList 2025}: Comprehensive
+{A}nime {D}ataset}. Conjunto de datos en línea; Kaggle.
 \url{https://www.kaggle.com/datasets/syahrulapriansyah2/myanimelist-2025}.
 
 \bibitem[\citeproctext]{ref-aja2025report}
-Association of Japanese Animations (AJA). 2024-\/-2025. {«Anime Industry
-Report»}. Reportes anuales sobre la industria de la animación japonesa.
-\url{https://aja.gr.jp/english/japan-anime-data}.
-
-\bibitem[\citeproctext]{ref-gelman2013bayesian}
-Gelman, Andrew, John B. Carlin, Hal S. Stern, David B. Dunson, Aki
-Vehtari, y Donald B. Rubin. 2013. \emph{Bayesian Data Analysis}. 3rd ed.
-Boca Raton, FL: Chapman \& Hall/CRC.
-
-\bibitem[\citeproctext]{ref-mcelreath2020rethinking}
-McElreath, Richard. 2020. \emph{Statistical Rethinking: A {B}ayesian
-Course with Examples in {R} and {S}tan}. 2nd ed. Boca Raton, FL: Chapman
-\& Hall/CRC.
+Association of Japanese Animations (AJA). 2024-\/-2025. \emph{Anime
+Industry Report}. Reportes anuales sobre la industria de la animación
+japonesa. \url{https://aja.gr.jp/english/japan-anime-data}.
 
 \bibitem[\citeproctext]{ref-mal2025}
-MyAnimeList LLC. 2025. {«{MyAnimeList}: Base de datos y comunidad de
-anime y manga»}. \url{https://myanimelist.net}.
+MyAnimeList LLC. 2025. \emph{{MyAnimeList}: Base de datos y comunidad de
+anime y manga}. \url{https://myanimelist.net}.
 
 \end{CSLReferences}
 
