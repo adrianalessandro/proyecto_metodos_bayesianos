@@ -299,7 +299,7 @@ perspectiva orientada al lado de la producción y se centra en la calidad
 evaluativa; la segunda adopta una perspectiva orientada al lado del
 consumo y se centra en la fidelización profunda.
 
-\subsubsection{Pregunta 1 --- Lado de la
+\subsubsection{Pregunta 1: Lado de la
 producción}\label{pregunta-1-lado-de-la-producciuxf3n}
 
 \textbf{¿Qué tanta diferencia de calidad (según la nota en MyAnimeList)
@@ -314,7 +314,7 @@ bayesiano que nos permita incluir incluso a aquellos estudios que han
 producido muy pocas series, compensando su falta de datos con el
 promedio general.
 
-\subsubsection{Pregunta 2 --- Lado del
+\subsubsection{Pregunta 2: Lado del
 consumo}\label{pregunta-2-lado-del-consumo}
 
 \textbf{¿Qué géneros logran una mayor fidelidad (proporción de favoritos
@@ -333,8 +333,8 @@ del anime.
 
 \subsection{Procedencia y muestra}\label{procedencia-y-muestra}
 
-Usamos datos de MyAnimeList (MAL) (MyAnimeList LLC 2025), una plataforma
-gigantesca donde los usuarios registran, califican y discuten animes.
+Usamos datos de MyAnimeList (MAL) (MyAnimeList LLC, 2025), una plataforma
+extensiva donde los usuarios registran, califican y discuten animes.
 MAL es una fuente muy rica porque mezcla datos oficiales de producción
 (estudio, género, fechas) con datos reales de consumo (cuánta gente ve
 la serie, qué notas le pone y cuántos la marcan como favorita).
@@ -511,7 +511,7 @@ original}\label{lado-de-la-producciuxf3n-estudios-y-material-original}
 }
 
 \caption{\label{fig-studios-distribution}Distribución del número de
-obras por estudio. Panel izquierdo: los 20 estudios con más obras. Panel
+obras por estudio. Gráfico izquierdo: los 20 estudios con más obras. Gráfico
 derecho: cuántas obras hacen los estudios en su mayoría.}
 
 \end{figure}%
@@ -538,7 +538,7 @@ procedencia de la historia (Manga, Novela, etc.).}
 
 La Figura 5 muestra que el material de origen afecta un poco a la nota.
 Las adaptaciones de mangas y novelas suelen ir un poquito mejor que las
-series 100\% originales. Sin embargo, la diferencia no es gigante, lo
+series 100\% originales. Sin embargo, la diferencia no es muy grande, lo
 que nos confirma que será muy útil ver cuánto de la nota final depende
 del material y cuánto depende del estudio que lo anima.
 
@@ -559,12 +559,12 @@ vacías corresponden a combinaciones sin observaciones.}
 La Figura 6 cuantifica la dispersión empírica del cruce Estudio ×
 Material original sobre los 15 estudios más productivos. La estructura
 revela patrones claros: algunos estudios muestran una clara orientación
-hacia un tipo de material ---Sunrise y Tatsunoko Production producen
+hacia un tipo de material (Sunrise y Tatsunoko Production producen
 mayoritariamente obras Originales, mientras que Toei Animation,
 J.C.Staff y Studio Pierrot se inclinan fuertemente hacia adaptaciones de
-Manga---; otros como Madhouse o Studio Deen muestran un portafolio más
-diversificado a lo largo de varias categorías. Igualmente importante es
-la abundancia de celdas con frecuencia muy baja, particularmente en las
+Manga), otros como Madhouse o Studio Deen muestran un portafolio más
+diverso a lo largo de varias categorías. Igualmente importante es
+la gran cantidad de celdas con frecuencia muy baja, particularmente en las
 categorías Novel y Game/VN: muchas combinaciones Estudio × Source están
 escasamente representadas (varias con menos de 5 obras), e incluso
 aparecen combinaciones sin observaciones, lo que reafirma la dificultad
@@ -593,7 +593,7 @@ nota promedio de los 15 estudios con más obras, con su margen de error
 (las barras horizontales). Notamos dos cosas clave: primero, sí hay
 diferencias entre estudios (algunos están sistemáticamente por encima
 del promedio, como Bones o Madhouse, y otros por debajo como Tatsunoko).
-Segundo, los estudios con pocas obras tienen barras de error enormes.
+Segundo, los estudios con pocas obras tienen barras de error muy grandes.
 Aquí solo mostramos el ``top 15''; si agregamos a los más de 200
 estudios que han hecho menos de 5 series, esas medias serían totalmente
 inestables. Por eso necesitamos el modelo bayesiano, que puede agrupar
@@ -669,7 +669,7 @@ años.}
 
 \end{figure}%
 
-La Figura 9 nos deja un descubrimiento interesante: nosotros creíamos
+La Figura 9 presenta un aspecto interesante a considerar: inicialmente se creía
 que los animes más nuevos tendrían tasas de favoritos más bajas, por
 tener menos tiempo en emisión. Pero la realidad es que la tasa general
 se ha mantenido súper estable a lo largo de las décadas, cerca del 0.3
@@ -677,8 +677,7 @@ se ha mantenido súper estable a lo largo de las décadas, cerca del 0.3
 posibles efectos en ciertas eras o en ciertos géneros de moda, como el
 ``Isekai'' reciente.
 
-\subsection{Comparación cruzada: ¿calidad y fidelización son la misma
-cosa?}\label{comparaciuxf3n-cruzada-calidad-y-fidelizaciuxf3n-son-la-misma-cosa}
+\subsection{Comparación cruzada: ¿calidad y fidelización son lo mismo?}\label{comparaciuxf3n-cruzada-calidad-y-fidelizaciuxf3n-son-la-misma-cosa}
 
 \begin{figure}[H]
 
@@ -723,7 +722,7 @@ ambas preguntas.
 Para la \textbf{Pregunta 1} usaremos un modelo jerárquico asumiendo que
 las notas (Score) se distribuyen de manera ``Normal'' o campana de Gauss
 (como vimos en la Figura 1). Este modelo suavizará las notas de los
-estudios que han hecho pocos animes, ``tirándolas'' un poco hacia el
+estudios que han hecho pocos animes, moviéndolas un poco hacia el
 promedio global para no sacar conclusiones apresuradas de un estudio con
 una sola obra exitosa. Controlaremos los resultados considerando si es
 un anime original, un manga adaptado, etc.
